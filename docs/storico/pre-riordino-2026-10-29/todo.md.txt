@@ -1,0 +1,84 @@
+# Correzione ritaglio foto mobile — 28/10/2026
+
+- [x] Esaminare screenshot: ritaglio nel blog, controlli occupano quasi tutto lo schermo.
+- [x] Confrontare CSS/Dialog e riprodurre su viewport mobili, anche in iframe.
+- [x] Bloccare pagina dietro senza impedire lo scroll interno.
+- [x] Rendere foto e comandi raggiungibili col dito; preservare confirm() e cropBox.ts (verifica byte/hash).
+- [x] Verificare gesti touch, maniglie, rotazione, annullamento, ripristino scroll: 9/9 scenari Chromium emulati, incluso iframe cross-origin e alto contrasto.
+- [x] Eseguire typecheck, 53/53 test unitari e build; test end-to-end 9/9 scenari ripetuto dalla repository.
+- [x] Salvare checkpoint e consegnare l’anteprima; successivamente pubblicare su conferma esplicita dell’utente: deploy 8728, attivo.
+- [x] Ripetere sul sito pubblico i 9/9 scenari touch emulati, con canvas reale e OCR simulato.
+
+## Export aggiornato dopo il rilascio
+- [x] Allineare skill, riferimenti e manifest al deploy 8728; documentare limiti del collaudo e dipendenze mobile.
+- [x] Verificare archivio da commit pulito: integrità CRC, tutti i sorgenti/asset confrontati SHA-256, runtime identico al commit pubblicato, assenza di file privati/runtime.
+- [x] Predisporre ZIP completo, checksum e due skill aggiornate/validate per la consegna; nessun nuovo deploy.
+
+
+## Pulsanti photo crop e foglio di clonazione (28/10/2026)
+- [x] Sostituire ANNULLA/CONFERMA TAGLIO con CHIUDI/RITAGLIA: marroni, compatti, target touch minimo 44px.
+- [x] Lasciare invariati confirm(), geometria, hook viewport e blocco/sincronizzazione cornice (confronto esatto con la versione precedente).
+- [x] Verificare typecheck, build, 53/53 unit test e 9/9 scenari desktop/touch/iframe con OCR simulato; 165 controlli complessivi.
+- [x] Generare PHOTO-CROP-CLONABILE.md con 17 sorgenti testuali incorporati e kit facoltativo; verificare ricostruzione dal solo foglio, SHA-256, typecheck/build separati e 6/6 scenari portabili senza OCR/IA.
+- [x] Preparare checkpoint, foglio autonomo e kit verificato per la consegna in anteprima; nessun nuovo deploy produzione senza conferma separata.
+
+
+## Riquadro unico e colore ALTRI MODI VERBALI (28/10/2026)
+- [x] Riunire RUOTA SINISTRA/DESTRA e CHIUDI/RITAGLIA nello stesso riquadro centrato, senza AZZERA; tutti marroni, righe centrate e altezza touch almeno 44px.
+- [x] Preservare scroll touch, blocco pagina, viewport iframe, confirm() e geometria; confronto byte delle funzioni protette nel generatore del kit.
+- [x] Sostituire il verde degli altri modi con OTHER_MOODS_COLOR #795548 (marrone cioccolato) nella fonte condivisa per tutti i sei modi; verde accusativo invariato. Verificate legenda, palette, analisi/regole/ruoli IA e PDF.
+- [x] Aggiornare regressioni, guide, manifest e foglio/kit clonabile: nessuna istruzione attiva di separare i comandi o ripristinare AZZERA.
+- [x] Typecheck/build riusciti; 64/64 unit test, 9/9 scenari crop (182 verifiche), 8 controlli UI colori/palette/PDF. PDF UI verificato indipendentemente con PyMuPDF. Kit ricostruito e compilato, 6/6 scenari portabili, senza OCR/IA reali.
+- [x] Preparare anteprima e materiali aggiornati per la consegna; produzione invariata, solo dopo conferma separata.
+
+
+## Trascinamento diretto e testata essenziale (28/10/2026)
+- [x] Rendere continuo il drag di bordi/angoli: pointer capture sul contenitore stabile, puntatore attivo unico, inversione immediata ai limiti. Difetto riprodotto con lo stesso test sul deploy 8730 e corretto in anteprima.
+- [x] Trascinare tutta l'area selezionata anche su touch, senza icona centrale; conservare pan nelle zone esterne e nei margini della finestra.
+- [x] Titolo RITAGLIA LA FOTO, nessun sottotitolo visibile; accessibilità con titolo e nomi delle maniglie.
+- [x] Lasciare invariati confirm(), cropBox.ts, viewport, heightSync, colori e pipeline OCR; confronto esatto nel generatore del kit.
+- [x] Collaudare otto maniglie, direzioni, limiti, pointercancel: 4/4 scenari drag, 143 controlli. 9/9 layout (201 controlli), 64/64 unitari e typecheck/build riusciti. Kit autonomo ricostruito/compilato: 6/6 scenari con drag diretto e PNG reale. Touch emulato, OCR simulato.
+- [x] Aggiornare guide, manifest e foglio/kit clonabile per la consegna dell'anteprima; produzione 8730 invariata, nuovo deploy solo con consenso separato.
+
+
+## Esportazione definitiva successiva al deploy 8731 (28/10/2026)
+- [x] Verificare commit pubblicato 3a4159402cb0f674ca2e269007d4cfcefe86bedd e ripristinare SOLO Dockerfile rimosso dal deploy.
+- [x] Allineare README/AGENTS/REBUILD/SCROLLING/OCR/ACCESSIBILITA, rilascio e manifest: crop e titolo già pubblicati, non in anteprima.
+- [x] Aggiornare skill latino-facile e zip-esportabile-guide-ia, riferimenti e verifica export; includere foglio autonomo nella skill di manutenzione.
+- [x] Rigenerare foglio con 18 sorgenti completi e kit 8731; ricostruzione dai blocchi Markdown e SHA-256 verificati.
+- [x] Ricontrollare fixture (6/6), tipi/test (64/64) e build; archivio completo da commit pulito con 211 file e SHA-256 di tutti i sorgenti/asset, runtime identico alla produzione 8731 e 18 sorgenti incorporati ricostruibili.
+- [x] Predisporre per la consegna foglio autonomo, ZIP completo, kit, due skill validate e verifiche d'integrità. Nessun nuovo deploy; produzione 8731 invariata.
+
+
+## Colori parole di servizio — 29/10/2026, anteprima
+- [x] Distinguere AVVERBI blu intenso #0057D9, PREPOSIZIONI petrolio #006B5E, CONGIUNZIONI oliva #747000; confronto con colori e sfumature, contrasto chip/PDF >=4,5:1.
+- [x] Aggiornare fonte unica, percorsi regole/IA, legenda, palette, PDF e colori di categoria dei suffissi nel PDF; inversione UI invariata.
+- [x] 82/82 unitari, check/build; 2/2 scenari colori desktop/mobile, PDF reale verificato tramite RGB del testo e rettangoli; 4/4 scenari regressione crop. IA simulata, touch emulato.
+- [x] Guide e manifest aggiornati; predisposta anteprima con checkpoint. Produzione 8731 invariata, pubblicazione solo dopo consenso separato.
+
+
+## Revisione richiesta: due grigi — 29/10/2026 (solo anteprima)
+- [x] Conservare avverbi #0057D9; preposizioni grigio chiaro #BDBDBD, congiunzioni grigio scuro #4A4A4A (contrasto fra grigi 4,72:1).
+- [x] Adattare testo dei chip (anche sconosciuti ricolorati), legenda e PDF (fill chiaro con contorno sottile scuro, senza sfondo), suffissi e override manuali.
+- [x] 84/84 unitari, tipi/build OK; 2/2 scenari desktop/mobile; 6 PDF reali con riempimenti/contorni, nessuna propagazione del bordo ad altri colori, legenda verificata. 4/4 regressioni drag foto OK. IA simulata e touch emulato.
+- [x] Aggiornare guide e manifest; revisione pronta per checkpoint e anteprima. Produzione 8731 invariata, nessun deploy senza consenso separato.
+
+
+## Deploy autorizzato 29/10/2026 — produzione 8754
+- [x] Verificare commit approvato 5fbfc61fc64036b442bca07703162cd70f1d28a3 e confermare checkpoint.
+- [x] Typecheck e 84/84 unitari prima del deploy; nessuna modifica funzionale aggiuntiva.
+- [x] Pubblicare sul servizio esistente https://latino-facile-app-2.easy-peasy.site (deploy 8754 attivo).
+- [x] Verificare backend reale: HTTP 200, avverbi #0057D9, preposizioni #BDBDBD, congiunzioni #4A4A4A.
+- [x] Ripetere sul pubblico 2/2 scenari colori UI con IA simulata e touch emulato; 6 PDF reali con fill/contorni/legenda; 4/4 drag foto (143 controlli).
+- [x] Ripristinare SOLO Dockerfile rimosso dal deploy, aggiornare note locali di rilascio senza cambiare runtime. ZIP precedente 8731 non rigenerato in questa richiesta.
+
+
+## ZIP 8754 e riconsegna skill accorpate — 29/10/2026
+- [x] Verificare runtime della produzione 8754 e baseline autonoma del cropper 8731.
+- [x] Individuare le due skill pertinenti: didattica-app-lingue e didattica-pubblicazione-blog.
+- [x] Aggiungere SKILLS-APP.md e allineare README/AGENTS/manifest alle skill accorpate e al nuovo export; nessuna modifica al runtime.
+- [x] Verificare tipi/test e pacchetti skill: typecheck, 84/84 test e build riusciti; 41 file delle due skill verificati con SHA-256, 45 collegamenti e alias corretti.
+- [x] Salvare checkpoint ed esportare da HEAD pulito.
+- [x] Controllare integrità CRC, SHA-256 di tutti i 215 file, 18 sorgenti crop incorporati e assenza di file privati/runtime; scansione credenziali senza corrispondenze (non audit di sicurezza completo).
+- [x] Predisporre ZIP completo e due skill installabili per la riconsegna, con rapporto di verifica e checksum; nessun nuovo deploy.
+

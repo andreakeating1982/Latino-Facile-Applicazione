@@ -1,0 +1,406 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ----------------------------------------------------------------
+   OpenDyslexic: font ad alta leggibilità usato in TUTTA l'app
+   (per dislessia e ipovedenti). File auto-ospitati in /fonts.
+   ---------------------------------------------------------------- */
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("/fonts/OpenDyslexic-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("/fonts/OpenDyslexic-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("/fonts/OpenDyslexic-Italic.otf") format("opentype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("/fonts/OpenDyslexic-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  /* Tema «quaderno di latino»: carta calda, inchiostro scuro, terracotta */
+  --radius: 0.9rem;
+  --background: #f8f1e4;
+  --foreground: #2e2018;
+  --card: #fffdf6;
+  --card-foreground: #2e2018;
+  --popover: #fffdf6;
+  --popover-foreground: #2e2018;
+  --primary: #b71c1c;
+  --primary-foreground: #fff6ea;
+  --secondary: #efe3cb;
+  --secondary-foreground: #4a3527;
+  --muted: #f0e6d2;
+  --muted-foreground: #5a4a38; /* contrasto elevato anche per i testi secondari */
+  --accent: #e8d9bc;
+  --accent-foreground: #4a3527;
+  --destructive: #c62828;
+  --destructive-foreground: #fff6ea;
+  --border: #3a2a1e;
+  --input: #3a2a1e;
+  --ring: #b71c1c;
+  --sidebar: #f3e9d6;
+  --sidebar-foreground: #2e2018;
+  --sidebar-accent: #e8d9bc;
+  --sidebar-accent-foreground: #2e2018;
+  --sidebar-border: #3a2a1e;
+  --sidebar-ring: #b71c1c;
+  --chart-1: #b71c1c;
+  --chart-2: #e65100;
+  --chart-3: #00695c;
+  --chart-4: #3949ab;
+  --chart-5: #ffb300;
+}
+
+.dark {
+  --primary: #b71c1c;
+  --primary-foreground: #fff6ea;
+  --background: #221811;
+  --foreground: #f3e9d6;
+  --card: #2e2018;
+  --card-foreground: #f3e9d6;
+  --popover: #2e2018;
+  --popover-foreground: #f3e9d6;
+  --secondary: #4a3527;
+  --secondary-foreground: #f3e9d6;
+  --muted: #3a2a1e;
+  --muted-foreground: #c9b493;
+  --accent: #4a3527;
+  --accent-foreground: #f3e9d6;
+  --destructive: #ef5350;
+  --destructive-foreground: #fff6ea;
+  --border: #c9b493;
+  --input: #c9b493;
+  --ring: #ef5350;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: "OpenDyslexic", "Cambria", "Times New Roman", Georgia, serif;
+    font-size: calc(18px * var(--lf-scale, 1));
+    line-height: var(--lf-lh, 1.65);
+    letter-spacing: 0.012em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+
+  /* Focus sempre ben visibile (accessibilità da tastiera e ipovedenti) */
+  :focus-visible {
+    outline: 3px solid #b71c1c;
+    outline-offset: 2px;
+  }
+
+  /* Selezione ad alto contrasto */
+  ::selection {
+    background: #b71c1c;
+    color: #fff6ea;
+  }
+}
+
+/* Rispetta chi preferisce meno animazioni (vestibolare / ipersensibilità) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  .font-display {
+    font-family: "OpenDyslexic", "Cambria", "Times New Roman", Georgia, serif;
+  }
+  .paper-bg {
+    background-color: #f8f1e4;
+    background-image:
+      radial-gradient(ellipse 80% 55% at 12% -5%, rgba(230, 81, 0, 0.09), transparent 60%),
+      radial-gradient(ellipse 60% 45% at 100% 0%, rgba(0, 105, 92, 0.08), transparent 55%),
+      radial-gradient(ellipse 55% 40% at 50% 110%, rgba(185, 28, 28, 0.07), transparent 60%);
+  }
+  .ink-border {
+    border: 2px solid #3a2a1e;
+  }
+  .card-paper {
+    background: #fffdf6;
+    border: 2px solid #3a2a1e;
+    border-radius: 18px;
+    box-shadow: 4px 5px 0 rgba(58, 42, 30, 0.16);
+  }
+  .chip-word {
+    display: inline-block;
+    border-radius: 10px;
+    padding: 3px 10px 4px;
+    font-weight: 600;
+    font-size: 1.28rem;
+    line-height: 1.35;
+    border: 2px solid #3a2a1e;
+    transition: transform 0.14s ease, box-shadow 0.14s ease, filter 0.14s ease;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: 2px 2px 0 rgba(58, 42, 30, 0.18);
+  }
+  .chip-word:hover {
+    transform: translateY(-2px) scale(1.04);
+    box-shadow: 3px 5px 0 rgba(58, 42, 30, 0.22);
+    filter: brightness(1.06);
+  }
+  .chip-word:focus-visible {
+    outline: 3px solid #3a2a1e;
+    outline-offset: 2px;
+  }
+  @keyframes chip-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.94);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  .chip-in {
+    animation: chip-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .legend-dot {
+    display: inline-block;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 0.35rem;
+    border: 2px solid #3a2a1e;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Barra di accessibilità (stile Cornice Universale)
+   ------------------------------------------------------------------ */
+:root {
+  --lf-scale: 1;
+  --lf-lh: 1.65;
+}
+
+/* Righello di lettura: banda che segue il puntatore */
+.lf-ruler-band {
+  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 40vh;
+  height: 2.4em;
+  min-height: 34px;
+  background: rgba(255, 224, 130, 0.38);
+  border-top: 2px solid rgba(230, 81, 0, 0.65);
+  border-bottom: 2px solid rgba(230, 81, 0, 0.65);
+  pointer-events: none;
+  z-index: 110;
+}
+html.lf-ruler .lf-ruler-band {
+  display: block;
+}
+
+/* Modalità ad alto contrasto */
+html.lf-hc {
+  filter: contrast(1.3) saturate(1.15);
+}
+html.lf-hc body {
+  background-color: #ffffff;
+}
+html.lf-hc .paper-bg {
+  background-color: #ffffff;
+}
+html.lf-hc .card-paper {
+  background: #ffffff;
+  border-color: #2e2018;
+  box-shadow: none;
+}
+
+/* Scrollbar sottile e delicata (stesso stile dell'app di riferimento) */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 62, 0.2);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 92, 62, 0.35);
+}
+
+/* Ritaglio foto: foto/testata scorrono, pagina sotto bloccata.
+   RUOTA SINISTRA/DESTRA e CHIUDI/RITAGLIA condividono UN riquadro centrato;
+   nessun AZZERA. Compatti su due righe mobile e una riga quando c'è spazio. */
+.lf-crop-dialog {
+  overscroll-behavior: none;
+}
+.lf-crop-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+.lf-crop-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px max(8px, env(safe-area-inset-bottom));
+}
+.lf-crop-footer > button {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: calc(50% - 4px);
+  min-height: 44px;
+  height: auto;
+  white-space: normal;
+  line-height: 1.35;
+  padding: 8px 12px;
+  text-align: center;
+  justify-content: center;
+}
+/* Mouse E touch: trascinamento diretto da tutta l'area selezionata.
+   Nessuna icona necessaria. Lo scroll rimane sui margini e fuori dal crop. */
+.lf-crop-move {
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* ------------------------------------------------------------------
+   EMBED (cornice dinamica / iframe a altezza automatica)
+   Quando l'app è dentro un iframe, la classe `lf-embedded` viene messa
+   su <html> da heightSync.ts: la pagina deve seguire il CONTENUTO,
+   quindi niente min-h-screen (100vh) — altrimenti l'altezza misurata
+   dipende dall'altezza dell'iframe e si crea un loop di crescita infinita.
+   ------------------------------------------------------------------ */
+html.lf-embedded .min-h-screen,
+html.lf-embedded .min-h-dvh {
+  min-height: 0 !important;
+}
+html.lf-embedded body {
+  min-height: 0 !important;
+}
+/* PRIMA PAGINA dentro la cornice del blog (lf-embedded): la card segue il
+   contenuto (niente min-height, niente ancoraggio in basso): la cornice
+   dinamica riceve l'altezza REALE (heightSync.ts NON gonfia più l'altezza
+   con lo scrollHeight del documento) e si restringe da sola, come per le
+   altre pagine dell'app. Lo spazio tra la barra di accessibilità e la card
+   è pareggiato con quello sotto la card: la barra ha già mb-1 (4px), quindi
+   padding-top 20px + 4px = 24px sopra, padding-bottom 24px sotto. */
+html.lf-embedded .lf-welcome {
+  min-height: 0 !important;
+  justify-content: flex-start;
+  padding-top: 20px;
+  padding-bottom: 24px;
+}
+/* Il primo contenitore interno della card ha pt-4 sm:pt-8 (16/32px): dentro
+   la cornice lo azzeriamo perché lo spazio sopra la card è già dato dal
+   padding-top di .lf-welcome (pareggiato con quello sotto). */
+html.lf-embedded .lf-welcome > div:first-child {
+  padding-top: 0 !important;
+}
+
+/* ------------------------------------------------------------------
+   PRIMA PAGINA come pagina autonoma (non iframe): la classe lf-welcome-top
+   viene messa su <html> da WelcomePage quando l'app è aperta da sola nel
+   browser (window.self === window.top). Il body crema (#f8f1e4) riempie
+   l'intero viewport e lasciava un grande vuoto sotto la card; rendendo
+   neutro il canvas sotto il contenuto, la pagina "termina" subito sotto la
+   card, replicando l'aspetto compatto delle altre app del blog (dove la
+   cornice iframe segue l'altezza del contenuto). Dentro l'iframe la classe
+   NON viene aggiunta: lì lo sfondo crema resta coerente con le altre pagine.
+   ------------------------------------------------------------------ */
+html.lf-welcome-top body {
+  background-color: #ffffff;
+}
+html.lf-welcome-top .lf-welcome {
+  position: relative;
+}
+/* Dissolvenza morbida in fondo al blocco crema: la pagina sfuma nel bianco
+   del canvas invece di tagliarsi con un bordo netto. */
+html.lf-welcome-top .lf-welcome::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48px;
+  background: linear-gradient(to bottom, rgba(248, 241, 228, 0), #ffffff);
+  pointer-events: none;
+}

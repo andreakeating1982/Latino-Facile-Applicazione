@@ -1,0 +1,27 @@
+.git
+**/node_modules
+# Easy-Peasy Cloud Run compila prima del confezionamento: dist/ deve entrare
+# nel contesto del container generato, che avvia node dist/index.js.
+# Il Dockerfile alternativo per Render ricostruisce comunque dai sorgenti.
+build
+.cache
+.pnpm-store
+coverage
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+**/*.log
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/*.pem
+**/*.key
+**/*.zip
+**/__pycache__
+docs/storico
+.vscode
+.idea
+.DS_Store

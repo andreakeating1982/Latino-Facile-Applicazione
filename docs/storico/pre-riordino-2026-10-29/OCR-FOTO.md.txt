@@ -1,0 +1,433 @@
+# 📷 Scatto foto · ritaglio · riconoscimento OCR
+
+> **SEZIONE DI RIFERIMENTO DELLA REPOSITORY.** Questo documento descrive
+> **esattamente** la funzionalità «SCATTA UNA FOTO DEL TESTO / CARICA UNA
+> FOTO → ritaglia i margini → leggi il testo con l'IA (ripiego OCR)» così
+> com’è nell’app (versione in produzione, tool trapiantato dal Widget
+> metacognitivo per espressioni il 26/10 — vedi `TRAPIANTO-FOTO.md` nel
+> repository del Widget).
+> È pensata per un **agente AI senza altri contesti**:
+>
+> 1. **Ricostruire** la stessa funzionalità in questa app (da GitHub o dallo ZIP).
+> 2. **Replicarla su un’altra app** simile (altra lingua / altro argomento)
+>    copiando il mini-pacchetto di file e adattando solo lingua OCR e testi.
+> 3. **Trasferirla su Render** via GitHub: i dati Tesseract sono file statici,
+>    nessuna variabile d’ambiente extra, nessuna CDN.
+>
+> 📌 **Navigazione rapida**: §1 flusso utente · §2 mini-pacchetto di file ·
+> §3 pipeline tecnica (scatto → EXIF → ritaglio → **IA foto** → ripiego Tesseract) ·
+> §4 bug del lato destro (maniglie DENTRO la foto) · §5 riuso su altre app ·
+> §6 Render · §7 checklist · §8 test.
+
+---
+
+## 1. Cosa fa (flusso utente)
+
+Sulla pagina `/app`, sotto il campo di testo ci sono SOLO i due pulsanti
+terracotta a pillola (stile Widget metacognitivo, niente riquadro upload,
+niente drag&drop, niente Ctrl+V, niente PDF):
+
+1. **SCATTA UNA FOTO DEL TESTO** — apre la fotocamera **posteriore**
+   (`<input type="file" accept="image/*" capture="environment">`);
+   durante la lettura mostra «LETTURA DELLA FOTO…».
+2. **CARICA UNA FOTO** — selettore file sole immagini
+   (`accept="image/png,image/jpeg,image/webp"`).
+3. La **foto** scelta viene **raddrizzata da sola** (orientamento EXIF del
+   telefono) e apre la modale **«Ritaglia la foto»**, senza istruzioni sotto il titolo e senza icona centrale; l'interno selezionato si trascina direttamente anche col dito.
+4. Lo studente lascia solo il testo: trascina **bordi e angoli** bianchi,
+   sposta il riquadro, ruota di **90°** se la foto è storta, poi
+   **RITAGLIA**.
+5. La **foto ritagliata viene letta dall'intelligenza artificiale**
+   (visione Gemini, route `POST /api/ai/transcribe` condivisa col Widget —
+   toast «L'intelligenza artificiale ha letto la foto…»). Se l'IA non vede
+   testo o non risponde (quota esaurita, errore, offline), l'app usa in
+   automatico l'**OCR classico** (Tesseract) sulla stessa foto: il flusso
+   non si interrompe mai. Il testo finisce nel campo (max 200 parole).
+   Poi **COLORA FRASE CON IA**.
+
+Limite file: **18 MB**. Formati foto: JPG, PNG, WEBP (BMP accettato in
+estensione). NESSUN supporto PDF nelle foto (rimosso il 26/10).
+
+---
+
+## 2. Mini-pacchetto di file (da copiare intero)
+
+| File | Ruolo | Cosa NON toccare |
+|---|---|---|
+| `client/src/lib/imagePrep.ts` | `normalizePhoto` (EXIF → JPEG dritto) + `enhanceForOcr` (scala, grigio, contrasto 2–98) | Logica dei percentili e `imageOrientation: "from-image"` |
+| `client/src/lib/cropBox.ts` | Geometria del box `%` (`moveBox`, `resizeBox`, `resizeCorner`, `MIN_BOX = 8`) | Formula del **lato destro**: `w = clamp(w + delta, MIN_BOX, 100 - x)` |
+| `client/src/lib/cropBox.test.ts` | Test del lato destro (restringe con delta negativo) e degli altri 3 lati + angoli | — |
+| `client/src/hooks/useCropDialogViewport.ts` | Viewport realmente visibile nel blog cross-origin e lock pagina con ripristino stili/scroll | Copiare insieme a CropDialog, CSS `.lf-crop-*` e guardia heightSync; vedi SCROLLING-MOBILE.md |
+| `client/src/components/CropDialog.tsx` | Modale ritaglio: 4 barrette + 4 angoli **tutta DENTRO** la foto; listener sulla `window`; foto piccole ingrandite a schermo (`MIN_IMG_W = 560`) | Vedi §3.3 e §4 |
+| `client/src/lib/ocr.ts` | Tesseract.js (`createWorker("lat")`, `PSM.SINGLE_BLOCK`, `user_defined_dpi=300`): **soccorso** quando l'IA foto non risponde (`ocrImage`; `ocrPdf` resta solo per riuso esterno, l'app NON accetta più PDF nelle foto) | `langPath: "/tessdata"` (niente CDN) |
+| `server/analyzer/aiTranscribeLatino.ts` (ex `fotoTranscribe.ts`) | Trascrizione FOTO con IA: valida il data URL (solo JPEG/PNG/WEBP, max ~7,5 MB), chiama Gemini con contratto «TRASCRIVI soltanto» (REGOLE ASSOLUTE adattate al latino, max_tokens 4000), pulisce la risposta (`NESSUN TESTO` → errore → ripiego Tesseract); registra anche la route REST condivisa `POST /api/ai/transcribe` (stesso contratto del Widget) | Prompt, validazione e route (test in `aiTranscribeLatino.test.ts`) |
+| `client/src/lib/aiTranscribe.ts` | Lato browser stile Widget: `fileToScaledDataUrl` (JPEG max lato 1800), `aiTranscribeImage(dataUrl, "photo")` → `POST /api/ai/transcribe`, `AiUnavailableError` → soccorso Tesseract; pulizia `cleanAiLatin` + plausibilità `aiLatinPlausible` (niente LaTeX: dominio latino) | — |
+| `server/analyzer/aiTranscribeLatino.ts` → `POST /api/ai/transcribe` | Route REST condivisa col Widget: `{ image: dataURL, kind: "photo" }` → `{ text }` (max_tokens 4000; 503 senza chiave, 502 se l'IA fallisce); ogni errore = il client usa l'OCR classico | NON cambiare la semantica d'errore (errore = ripiego, mai blocco); la mutation tRPC `latino.foto` è stata RIMOSSA il 26/10 |
+| `client/src/lib/ocrClean.ts` | Normalizza il testo (`\|`→`l`, virgolette, spazi) | — |
+| `client/src/lib/ocr.test.ts` | Test di `cleanOcrText` | — |
+| `client/public/tessdata/lat.traineddata.gz` | Dati lingua **latino** (~1,7 MB). Il worker li carica da `/tessdata` | Non rimuovere; per un’altra lingua **sostituire** il file (vedi §5) |
+| `client/src/pages/Home.tsx` | UI stile Widget: due pulsanti terracotta SCATTA/CARICA, `handleFotoFile` → crop → `onCropConfirmRef` → `runFotoTranscribe` (IA via REST, soccorso Tesseract) | Collegamento: foto **sempre** dal ritaglio; testo nel campo, mai analisi automatica |
+
+Dipendenze (`package.json`): `"tesseract.js": "^7.0.0"`, `"pdfjs-dist": "^6.2.108"`.
+Worker pdfjs: `new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url)`.
+
+Vitest include i test client: in `vitest.config.ts` deve esserci
+`client/src/lib/**/*.test.ts` accanto a `server/**/*.test.ts`.
+
+---
+
+## 3. Pipeline tecnica (ordine obbligatorio)
+
+```
+file foto (solo immagini: i PDF non sono più accettati)
+  │
+  ├─ size > 18 MB? → errore, stop
+  └─ immagine?
+        │
+        ├─ 1. normalizePhoto(file)     // EXIF → foto dritta (createImageBitmap + canvas)
+        ├─ 2. CropDialog (box 0,0,100,100)
+        │      maniglie DENTRO la foto · pointermove sulla window
+        │      UN riquadro centrato: RUOTA SINISTRA/DESTRA · CHIUDI · RITAGLIA (senza AZZERA)
+        │      foto piccole ingrandite a schermo (lato lungo ≥ MIN_IMG_W=560)
+        ├─ 3. canvas.toBlob JPEG 0.92  // ritaglio confermato (foto_ritagliata.jpg)
+        ├─ 4. INTELLIGENZA ARTIFICIALE // fileToScaledDataUrl (JPEG lato max 1800)
+        │      → POST /api/ai/transcribe { image, kind:"photo" }
+        │      → Gemini legge la foto → testo latino (toast dedicato)
+        ├─ 5. se l'IA fallisce → RIPIEGO OCR CLASSICO sulla stessa foto:
+        │      enhanceForOcr (max lato 2200, min 720, grigio, contrasto) →
+        │      tesseract.recognize (lat, PSM.SINGLE_BLOCK, dpi 300)
+        └─ 6. testo nel campo (tronca a MAX_PAROLE=200 parole)
+```
+
+### 3.1 Scatto (`Home.tsx`, stile Widget metacognitivo)
+
+Due `<input type="file" className="hidden">` dietro i due pulsanti
+terracotta a pillola:
+
+- **CARICA UNA FOTO** — `accept="image/png,image/jpeg,image/webp"`
+  (solo immagini, NIENTE PDF). Il pulsante chiama `uploadInputRef.current?.click()`.
+- **Fotocamera** — `accept="image/*"` + **`capture="environment"`** (posteriore).
+  Il pulsante chiama `cameraInputRef.current?.click()`; durante la lettura
+  mostra «LETTURA DELLA FOTO…».
+
+NESSUN drag&drop, NESSUN paste globale, NESSUN riquadro tratteggiato
+(rimossi il 26/10 col trapianto del tool foto del Widget). Handler unico
+`handleFotoFile` (max 18 MB, solo immagini) → `normalizePhoto` →
+`CropDialog` → `onCropConfirmRef` → `runFotoTranscribe`. Testo guida rimosso
+(niente «Clicca per scegliere…/JPG…/Oppure premi…/Inquadra il testo…»).
+
+Vecchio flusso (pre-26/10, solo storico): drop-zone tratteggiata e **paste** globale (`ClipboardEvent`, solo
+`item.type.startsWith("image/")`) chiamano lo stesso `handleOcrFile`.
+Dopo ogni `change` si fa `e.target.value = ""` così si può ricscattare la
+stessa foto.
+
+### 3.2 Raddrizza EXIF (`imagePrep.ts` → `normalizePhoto`)
+
+Le foto del telefono arrivano spesso ruotate di 90°.
+`createImageBitmap(blob, { imageOrientation: "from-image" })` applica i
+flag EXIF; si ridisegna su canvas e si restituisce un `File` JPEG 0.92
+(`foto.jpg`). Se fallisce, si mostra comunque l’originale nel ritaglio.
+
+### 3.3 Ritaglio (`CropDialog.tsx` + `cropBox.ts`)
+
+Box in **percentuali** `{ x, y, w, h }` sulla foto (stato iniziale: tutta
+la foto). Vincoli: `MIN_BOX = 8`, box **sempre dentro** `[0, 100]`.
+
+**Foto piccole ingrandite a schermo (`MIN_IMG_W = 560`):** le dimensioni
+mostrate (`disp`, calcolate da `computeDisp` con `stageRef`/`natRef`)
+ingrandiscono la foto finché il lato lungo non raggiunge **560 px**
+(ricalcolo anche su `resize` della finestra e dopo la rotazione, perché il
+nuovo `onLoad` riparte). È solo un ingrandimento **a schermo**: il box è in
+percentuale sulla foto originale, quindi il taglio confermato è identico.
+Il wrap non ha `max-w-full` (taglierebbe la foto ingrandita con
+`overflow-hidden`); prima del load l'`<img>` mantiene
+`max-h-[46dvh] w-auto max-w-full`.
+
+- **4 barrette** (lati) + **4 quadratini** (angoli) = `role="slider"` con
+  `aria-label` e zona di presa **44 px**, tutte **interne** al box
+  (es. lato destro: `left: calc(${x+w}% - 44px)`).
+- **Sposta in blocco**: area chiara interna (`role="group"`, icona 4 frecce);
+  visibile solo quando il box non è più 100×100. Tastiera: frecce 2%,
+  Shift+frecce 10%.
+- **Rotazione 90°** (due pulsanti, `aria-label` «a sinistra / a destra»):
+  canvas scambia width/height, reset del box a tutta la foto.
+- Conferma: ritaglio su canvas JPEG 0.92 → `onConfirm(File)`.
+
+**Trascinamento:** `pointerdown` sulla maniglia salva lo stato di partenza;
+`pointermove` / `pointerup` / `pointercancel` sono su **`window`**, non sulla
+maniglia. Così il gesto non si interrompe se il dito esce dalla barretta
+(e non compete con lo scroll: `touch-action: none` sul wrap).
+
+### 3.4 Pretrattamento OCR (`enhanceForOcr`)
+
+Prima di Tesseract (sulla foto ritagliata):
+
+- scala il lato lungo a **max 2200 px**, o il lato corto a **min 720 px**;
+- scala di grigi (luma 0.299/0.587/0.114);
+- **stretch del contrasto** sui percentili 2–98 (niente soglia dura: resta
+  l’antialias delle lettere);
+- output **PNG lossless**.
+
+Se il pretrattamento fallisce, si riconosce comunque l’originale.
+
+### 3.5 Intelligenza artificiale della foto (`aiTranscribeLatino.ts` + `POST /api/ai/transcribe`)
+
+Il client riduce la foto ritagliata (`fileToScaledDataUrl`, JPEG lato max
+1800) e la invia alla route REST `POST /api/ai/transcribe` con
+`{ image, kind: "photo" }`. Il server valida il data URL (solo
+`image/jpeg|png|webp`, base64 sotto ~7,5 MB — altrimenti errore → ripiego
+OCR) e la fa leggere a Gemini con contratto «TRASCRIVI soltanto» (REGOLE
+ASSOLUTE adattate al latino, max_tokens 4000): trascrivere **solo** il testo
+latino visibile fino all'ultima riga, senza virgolette/spiegazioni/markdown,
+senza accenti, numeri delle frasi mantenuti; se non vede testo latino
+risponde `NESSUN TESTO`. `normalizeTranscription` toglie fence/virgolette,
+collassa gli spazi e mappa `NESSUN TESTO` → stringa vuota → errore →
+ripiego OCR. Richiede `EASY_PEASY_API_KEY` (stessa chiave della
+traduzione/colorazione; 503 senza chiave → soccorso locale). Test:
+`server/analyzer/aiTranscribeLatino.test.ts` (5 test: validazione
+formati/pulizia). **Regola d'oro:** la route NON deve mai bloccare il
+flusso foto — ogni errore qui significa «usa Tesseract».
+
+### 3.6 Tesseract — ripiego OCR (`ocr.ts`)
+
+```ts
+createWorker("lat", 1, { langPath: "/tessdata", logger })
+await w.setParameters({
+  tessedit_pageseg_mode: PSM.SINGLE_BLOCK, // blocco di testo stampato (libro)
+  preserve_interword_spaces: "1",
+  user_defined_dpi: "300",
+});
+```
+
+Il worker è un **singleton** (si crea una volta per sessione). Il file
+`lat.traineddata.gz` deve stare in `client/public/tessdata/` e viene servito
+come statico da Express / Vite / Render: **nessun download a runtime**.
+
+`cleanOcrText`: collassa whitespace, `|` → `l` (errore OCR frequente),
+virgolette tipografiche → `"`.
+
+---
+
+## 4. Bug del lato destro (lezione chiave — non ripetere)
+
+**Sintomo:** la cornice tratteggiata **non si restringe** tirando il bordo
+destro (né l’angolo in basso a destra).
+
+**Causa:** le maniglie erano posizionate **a cavallo** del bordo della foto
+(`transform: translateX(50%)` / `right: 0` con metà maniglia **fuori**).
+Il wrap ha `overflow-hidden` (foto con angoli arrotondati) → la metà esterna
+veniva **tagliata** e non riceveva i pointer. In più il `pointermove` era
+solo sull’elemento della maniglia: appena il dito usciva, il gesto moriva.
+
+**Fix obbligatorio (già nel codice):**
+
+1. Tutte le 8 maniglie stanno **interamente DENTRO** il box
+   (`left: calc(${x+w}% - HANDLE_SIZE px)` per il lato destro;
+   stesso schema per basso e angoli NE/SE).
+2. Listener di trascinamento sulla **`window`**.
+3. Test in `cropBox.test.ts`: `resizeBox(full, "right", -25)` → `w === 75`.
+
+Quando si modifica `CropDialog.tsx`, **non** riposizionare le maniglie a
+cavallo del bordo e **non** togliere i listener globali.
+
+---
+
+## 5. Come replicare su un’altra app (da repository GitHub)
+
+Obiettivo: stessa UX (scatta → ritaglia → OCR) in un’app gemella
+(inglese, spagnolo, francese, altro argomento).
+
+### 5.1 Copiare i file
+
+Copia **tutti** i file della tabella §2 (tranne `Home.tsx`: lì si **adatta**
+il collegamento, non si copia alla cieca).
+
+```bash
+# dalla repo Latino Facile (questa) verso la nuova app
+cp client/src/lib/imagePrep.ts   ../nuova-app/client/src/lib/
+cp client/src/lib/cropBox.ts     ../nuova-app/client/src/lib/
+cp client/src/lib/cropBox.test.ts ../nuova-app/client/src/lib/
+cp client/src/lib/ocr.ts         ../nuova-app/client/src/lib/
+cp client/src/lib/ocrClean.ts    ../nuova-app/client/src/lib/
+cp client/src/lib/ocr.test.ts    ../nuova-app/client/src/lib/
+cp client/src/components/CropDialog.tsx ../nuova-app/client/src/components/
+cp server/analyzer/aiTranscribeLatino.ts ../nuova-app/server/analyzer/
+cp server/analyzer/aiTranscribeLatino.test.ts ../nuova-app/server/analyzer/
+cp client/src/lib/aiTranscribe.ts ../nuova-app/client/src/lib/
+mkdir -p ../nuova-app/client/public/tessdata
+# traineddata: vedi 5.3
+```
+
+Nella nuova app si aggiunge la route REST `POST /api/ai/transcribe` (copia
+`registerAiTranscribeRoute` da `server/analyzer/aiTranscribeLatino.ts`
+di questa app e registrala nel server) con il prompt
+adattato alla lingua («Trascrivi ESATTAMENTE il testo in FRANCESE…»);
+`validateImageInput`/`normalizeTranscription` restano uguali.
+
+Aggiungi le dipendenze se mancano:
+
+```bash
+pnpm add tesseract.js pdfjs-dist
+```
+
+In `vitest.config.ts` della nuova app, includi `client/src/lib/**/*.test.ts`.
+
+### 5.2 Collegare la UI (nella pagina principale)
+
+Nella pagina dove vive il campo di testo (in questa app: `Home.tsx`):
+
+1. Import: `CropDialog`, `ocrImage`, `ocrPdf`, `cleanOcrText`, `normalizePhoto`.
+2. Due input hidden (SCATTA con `capture="environment"` + CARICA solo immagini), NIENTE drop-zone/paste/PDF.
+3. `handleFotoFile`: foto → `normalizePhoto` → apri `CropDialog`.
+4. `onCropConfirm` → `onCropConfirmRef` → `runFotoTranscribe` (IA via REST, soccorso Tesseract).
+5. Progresso: `role="status"` `aria-live="polite"`.
+6. Traduci **solo i testi visibili** (titolo modale, pulsanti, toast, aria-label,
+   «SCATTA UNA FOTO DEL TESTO», hint «inquadra da vicino e dritto»). La geometria
+   del box **non** dipende dalla lingua.
+
+Snippet minimo del collegamento:
+
+```tsx
+<CropDialog
+  open={!!cropImage}
+  imageUrl={cropImage?.url ?? null}
+  onConfirm={(file) => { closeCrop(); void onCropConfirmRef.current(file); }}
+  onClose={closeCrop}
+/>
+```
+
+### 5.3 Cambiare lingua OCR
+
+1. Scarica il traineddata della lingua da
+   https://github.com/naptha/tessdata/tree/gh-pages
+   (file `eng.traineddata.gz` / `spa.traineddata.gz` / `fra.traineddata.gz` —
+   versione **standard**, gzip).
+2. Mettilo in `client/public/tessdata/` **al posto** di `lat.traineddata.gz`
+   (stesso nome del codice lingua).
+3. In `ocr.ts` cambia **una sola stringa**:
+   `createWorker("lat", …)` → `"eng"` / `"spa"` / `"fra"`.
+   Il nome del file **deve** coincidere (`langPath: "/tessdata"` + codice lingua).
+4. Aggiorna `aria-label` del pulsante fotocamera («testo latino» → nuova lingua)
+   e i toast.
+
+`PSM.SINGLE_BLOCK` e `user_defined_dpi=300` restano: vanno bene per testo
+stampato di qualsiasi lingua alfabetica. Per testo verticale (es. giapponese)
+si userebbe `PSM.SINGLE_BLOCK_VERT_TEXT` — fuori dallo scopo di questa guida.
+
+### 5.4 Cosa NON copiare / NON cambiare
+
+- Il motore Whitaker / i colori della legenda: sono di **questa** app, non
+  dell’OCR.
+- `MAX_PAROLE = 200` (in `client/src/lib/parole.ts`: `contaParole`/`troncaParole`) si può alzare nella nuova app, ma va applicato sia al textarea sia al testo OCR.
+- Non puntare Tesseract a un CDN: su Render (e in aula senza rete stabile)
+  deve funzionare **offline rispetto a tesseract**.
+
+---
+
+## 6. Trasferimento su Render (via GitHub)
+
+La funzionalità **non richiede variabili d’ambiente**. I dati OCR viaggiano
+con il repository:
+
+| Cosa | Dove finisce su Render |
+|---|---|
+| `client/public/tessdata/lat.traineddata.gz` | copiato in `dist/public/tessdata/` dalla `vite build` |
+| Worker tesseract.js | bundle client (già in `node_modules`) |
+| Worker pdfjs (`pdf.worker.min.mjs`) | emesso da Vite accanto al bundle |
+
+Percorso: ZIP → GitHub → Blueprint Render (`render.yaml`) — vedi
+[`RENDER.md`](RENDER.md). Dopo il deploy:
+
+1. Apri `https://<servizio>.onrender.com/app`.
+2. Verifica che `https://<servizio>.onrender.com/tessdata/lat.traineddata.gz`
+   risponda **200** (file statico).
+3. Carica una foto con testo → si apre il ritaglio → Conferma → il testo
+   compare nel campo.
+
+Se l’OCR «gira a vuoto» al 0%: quasi sempre il traineddata **non è stato
+committato** (file `.gz` troppo grande per un `.gitignore` aggressivo).
+Controlla `git ls-files client/public/tessdata/`.
+
+Niente chiavi API, niente servizi esterni, niente volume persistente.
+
+---
+
+## 7. Checklist di verifica
+
+- [ ] `pnpm check` → 0 errori; `pnpm test` include `cropBox.test.ts` (lato
+      destro restringe) e `ocr.test.ts`
+- [ ] Pulsante **SCATTA UNA FOTO DEL TESTO** presente, `capture="environment"`
+- [ ] Foto da galleria / drag-drop / Ctrl+V aprono **tutte** il ritaglio
+      (dopo il raddrizzamento EXIF)
+- [ ] NIENTE PDF nelle foto: solo JPG/PNG/WEBP (il selettore CARICA li filtra con `accept`)
+- [ ] File > 18 MB → messaggio di errore, nessuno crash
+- [ ] Nel ritaglio: 8 maniglie visibili **dentro** la foto (4 lati + 4 angoli)
+- [ ] Trascinando il **lato destro verso sinistra** la cornice si restringe
+      (zona scura a destra)
+- [ ] Stesso per alto / basso / sinistra e per gli angoli
+- [ ] Pulsanti **90°** ruotano la foto e azzerano il box
+- [ ] **RITAGLIA** → «Riconoscimento in corso… N%» (`aria-live`)
+- [ ] Testo riconosciuto nel textarea, toast di successo; oversize troncato
+      a 200 parole
+- [ ] `/tessdata/lat.traineddata.gz` è 200 in locale **e** su Render
+- [ ] Screen reader: maniglie con `aria-label`, 90° con `aria-label`,
+      progresso `role="status"`
+
+---
+
+## 8. Test automatici già nella repo
+
+```bash
+pnpm test
+# ✓ client/src/lib/cropBox.test.ts  (10 test — incluso «lato destro restringe»)
+# ✓ client/src/lib/ocr.test.ts      (4 test — cleanOcrText)
+```
+
+Quando si cambia `resizeBox` / `resizeCorner`, **prima** si aggiornano i test
+in `cropBox.test.ts`, poi il componente. Il caso che in passato era rotto:
+
+```ts
+expect(resizeBox({ x: 0, y: 0, w: 100, h: 100 }, "right", -25))
+  .toEqual({ x: 0, y: 0, w: 75, h: 100 });
+```
+
+---
+
+## 9. Accessibilità (riepilogo; dettaglio in `ACCESSIBILITA.md`)
+
+- Maniglie `role="slider"` + `aria-valuenow` (larghezza o altezza del box).
+- Zona sposta: `role="group"` con focus visibile e frecce da tastiera.
+- 90°: `aria-label` esplicite («Ruota la foto di 90 gradi a sinistra/destra»).
+- Progresso OCR: `role="status"` `aria-live="polite"`.
+- Zone di presa 44 px (dito + mouse); informazione mai solo cromatica
+  (tratteggio bianco + oscuramento + icona sposta).
+
+Per portarle su un’altra app insieme al resto del «pacchetto accessibilità»
+vedi [`ACCESSIBILITA.md`](ACCESSIBILITA.md) §3.
+
+---
+
+## 10. Riferimenti incrociati
+
+| Documento | Cosa contiene rispetto a questa sezione |
+|---|---|
+| [`AGENTS.md`](AGENTS.md) | Punto d’ingresso: «replicare scatto/ritaglio/OCR» → questo file |
+| [`REBUILD.md`](REBUILD.md) | Ricostruzione identica; i punti 8 e 12 riassumono, il dettaglio è qui |
+| [`ADATTARE.md`](ADATTARE.md) | Passo 4 (lingua OCR) + testi del CropDialog |
+| [`RENDER.md`](RENDER.md) | Deploy GitHub → Render; verifica OCR al punto 6 della checklist |
+| [`ACCESSIBILITA.md`](ACCESSIBILITA.md) | ARIA/tastiera del ritaglio (§2.10) |
+| [`manifest.json`](manifest.json) | Metadati macchina (`docs.ocrFoto`, `keyFiles.cropDialog`) |
+
+---
+
+## Scrolling mobile della finestra di ritaglio
+
+La finestra di ritaglio deve **scorrere col dito DENTRO**, con l'app dietro
+FERMA (`modal={true}`). Copiare anche `client/src/hooks/useCropDialogViewport.ts`,
+le regole `.lf-crop-*` di `index.css` e il blocco di heightSync durante il lock:
+il viewport è la parte visibile del blog, non l'intera altezza dell'iframe.
+Solo titolo RITAGLIA LA FOTO e foto scorrono; RUOTA SINISTRA/DESTRA,
+CHIUDI e RITAGLIA restano in un solo riquadro centrato. Nessuna icona centrale:
+spostare la selezione trascinandone l'interno, anche touch. Scroll nei margini
+beige e nelle zone esterne alla selezione. Versione pubblicata: deploy 8731.
+Geometria e confirm() invariati. Guida e test: [`SCROLLING-MOBILE.md`](SCROLLING-MOBILE.md).

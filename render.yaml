@@ -1,0 +1,27 @@
+# Blueprint Render: un solo Web Service Node, nessun database obbligatorio.
+# Vedere RENDER.md prima di collegare una nuova repository.
+# Le chiavi IA NON sono trasferite: aggiungerle dal dashboard, se desiderato.
+# Il database opzionale serve al login, NON alle chiamate IA.
+services:
+  - type: web
+    name: latino-facile
+    runtime: node
+    region: frankfurt
+    plan: free
+    buildCommand: corepack pnpm install --frozen-lockfile --prod=false && corepack pnpm build
+    startCommand: node dist/index.js
+    healthCheckPath: /_health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_VERSION
+        value: "22.22.2"
+      - key: NODE_ENV
+        value: production
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+# PORT è fornita da Render. Non impostare un valore fisso.
+# Dopo il primo deploy, in Environment aggiungere solo ciò che si usa:
+# EASY_PEASY_API_KEY: IA foto, verifica/colore e traduzione (nessun DB richiesto).
+# DEEPL_API_KEY: provider alternativo già supportato dal codice.
+# DATABASE_URL + TRUSTED_ORIGINS: soltanto per il login opzionale.
+# Non aggiungere seed, reset o migrazioni automatiche alla build.

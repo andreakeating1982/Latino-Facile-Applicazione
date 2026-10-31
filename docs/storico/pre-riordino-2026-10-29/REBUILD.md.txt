@@ -1,0 +1,248 @@
+# RICOSTRUZIONE COMPLETA DELL'APP — Guida per agenti AI
+
+> **Palette 29/10 PUBBLICATA, deploy 8754:** SERVICE_COLORS: avverbio #0057D9,
+> preposizione #BDBDBD (grigio chiaro), congiunzione #4A4A4A (grigio scuro).
+> Il PDF segue i nuovi colori, anche i suffissi (-cum chiaro, -que/-ve/-ne
+> scuro). Il chiaro mantiene il fill e usa contorno 0,35pt #595959 senza
+> sfondo, con stato isolato q/Q; legendExplanationColor non schiarisce i due
+> grigi nelle didascalie. Testo scuro sui chip chiari. Inversione UI invariata.
+> Fonte corrente: COLORI-PAROLE-SERVIZIO.md. Non ripristinare i vecchi grigi
+> dagli appunti storici 26–28/10 riportati sotto.
+>
+> **Revisione drag/testata PUBBLICATA, deploy 8731:** titolo
+> RITAGLIA LA FOTO, senza istruzioni né icona. Interno selezionato trascinabile
+> mouse/touch, pan sui margini. Pointer capture sul wrapper, delta incrementali
+> e nessuna zona morta invertendo ai limiti. `tests/crop-drag.e2e.mjs`.
+>
+> **Base già pubblicata 8730 (precedenza sulle note storiche):**
+> quattro pulsanti RUOTA SINISTRA/DESTRA, CHIUDI, RITAGLIA in UN SOLO riquadro
+> centrato (`data-crop-controls`), tutti marroni e compatti; nessun AZZERA.
+> `OTHER_MOODS_COLOR = #795548` (marrone cioccolato) sostituisce il verde per
+> imperativo/infinito/participio/gerundio/gerundivo/supino. Motore, legenda,
+> palette manuale e PDF derivano dalle stesse costanti in shared/types.ts;
+> non ricolorare l'ACCUSATIVO. I PDF nuovi seguono la nuova legenda, mentre
+> gli asset quaderno storici e i file già scaricati non sono riscritti.
+> Codice pubblicato: 3a4159402cb0f674ca2e269007d4cfcefe86bedd. Questo
+> export aggiorna soltanto guide e manifest, senza cambiare il runtime.
+
+> **Ritaglio mobile, correzione 28/10:** le note storiche su `modal={false}`
+> NON valgono più per CropDialog. Ora è MODALE: pagina dietro ferma, corpo
+> interno scorrevole e viewport realmente visibile nel blog. Copiare anche
+> `useCropDialogViewport.ts`, le regole `.lf-crop-*` di `index.css` e il lock
+> di `heightSync.ts`. ColorDialog invariato. Guida attuale: `SCROLLING-MOBILE.md`.
+> Test ripetibile: `node tests/crop-mobile.e2e.mjs` (server dev su 3000).
+
+> Questa guida serve a ricostruire l'app **«Latino Facile»** da zero, in modo **identico all'originale**, partendo da questa repository (GitHub o ZIP). È scritta per essere eseguita da un agente AI o da uno sviluppatore, senza bisogno di altri contesti.
+>
+> 🔀 **Vuoi creare una NUOVA app simile** (es. per l'inglese, lo spagnolo o il francese)? Usa la guida **[`ADATTARE.md`](ADATTARE.md)**: spiega passo-passo cosa cambiare (testi, motore di analisi, OCR, PDF, colori, cornice, deploy) mantenendo intatta l'accessibilità.
+>
+> 🚀 **Vuoi solo trasferire QUESTA app da Easy-Peasy AI a Render via GitHub?** Usa la guida **[`RENDER.md`](RENDER.md)**: percorso completo ZIP → GitHub → Render (Blueprint) con verifica e variabili d'ambiente.
+
+## 0. Accessibilità (LEGGI PRIMA)
+
+Questa app è **accessibile per la didattica inclusiva** (DSA/BES, ipovisione): il font **OpenDyslexic** è il font principale di tutta l'interfaccia, e la barra di accessibilità (dimensione testo 80–160%, interlinea 1.65–2.6, righello di lettura, alto contrasto, lettura ad alta voce Ascolto → Leggi) è visibile su ogni pagina. **Il documento [`ACCESSIBILITA.md`](ACCESSIBILITA.md) ricapitola TUTTE le misure** (font, barra, focus da tastiera, `prefers-reduced-motion`, lettura ad alta voce, PDF in OpenDyslexic, embed accessibile) e spiega come riusarle su altre app: copialo insieme a `AccessibilityContext.tsx`, `AccessibilityToolbar.tsx`, `useReadAloud.ts` (lettura ad alta voce), la cartella `client/public/fonts/` e le regole CSS indicate — sono il «pacchetto accessibilità» riutilizzabile.
+
+> ⚠️ Durante la ricostruzione NON rimuovere: i `@font-face` di OpenDyslexic in `client/src/index.css`, la barra di accessibilità, le variabili CSS `--lf-scale`/`--lf-lh`, le classi `lf-ruler`/`lf-hc`, il blocco CORS `/fonts` in `server/_core/index.ts` e la sincronizzazione altezza embed (`heightSync.ts`). Sono parte integrante dell'app.
+
+## 1. Che cos'è questa app
+
+Applicazione web didattica che colora le frasi latine parola per parola:
+
+- L'utente scrive (o carica tramite OCR) una o più frasi in latino.
+- Il server le analizza con il motore **Whitaker's Words**, arricchito da un glossario italiano personalizzato.
+- Ogni parola viene colorata in base alla categoria grammaticale e mostrata grande e in grassetto (le parole NON vanno dentro riquadri colorati).
+- Toccando una parola si vedono tutte le analisi possibili e si può cambiare il colore.
+- L'utente può scaricare il PDF della frase colorata (parole grandi, in grassetto, lettere colorate, una frase per riga, **senza intestazione**).
+- Un pulsante **MOSTRA/NASCONDI TRADUZIONE** mostra la traduzione in italiano (IA se disponibile, altrimenti glossario parola per parola).
+- Interfaccia in font **OpenDyslexic** ad alta leggibilità (fallback Cambria/Times New Roman/Georgia) — vedi [`ACCESSIBILITA.md`](ACCESSIBILITA.md).
+- **Nessun footer**: la pagina termina con l'area di lavoro. In alto, header con titolo **"LATINO FACILE"** centrato e la barra di accessibilità **bianca** (FONT/INTERLINEA/RIGHELLO/MODALITÀ/ASCOLTO) sopra la fascia header uniforme color carta `#f8f1e4`. **Nessun pulsante al quaderno nell'header**: i pulsanti "IL QUADERNO PDF" e la costante `PDF_LINK` sono stati RIMOSSI da `Home.tsx` (i PDF del quaderno restano solo come asset storici in `client/public/`). NON reintrodurli senza richiesta esplicita dell'utente.
+
+## 1. Requisiti
+
+- **Node.js 22+**
+- **pnpm 10.4.1** (dichiarato in `packageManager` nel `package.json`; corepack lo impone automaticamente)
+
+## 2. Passi di ricostruzione
+
+```bash
+# 1) Ottieni il codice
+git clone <URL-repository> && cd latino-facile-app
+# oppure: estrai lo ZIP nella cartella latino-facile-app/
+
+# 2) Installa le dipendenze (il lockfile garantisce versioni identiche)
+pnpm install --frozen-lockfile
+
+# 3) Crea le variabili d'ambiente
+cp .env.example .env
+# ⚠️ POI inserisci la chiave reale: EASY_PEASY_API_KEY=... (e DEEPL_API_KEY=...)
+#    Senza chiave l'app NON dà errori: SILENZIOSAMENTE ricade su traduzione
+#    MyMemory + colorazione «regole» (incidente del 25/10/2026: ricostruzione
+#    da GitHub senza ripristino del .env → l'utente ha perso l'IA per giorni).
+#    Verifica rapida dopo l'avvio:
+#    curl -s -X POST "http://localhost:3000/api/trpc/latino.translate?batch=1" \
+#      -H "Content-Type: application/json" \
+#      -d '{"0":{"json":{"text":"Puella ancillam amat."}}}' | grep -o 'colorSource":"[a-z]*'
+#    → deve restituire "colorSource":"ai" (se restituisce "regole" la chiave
+#      manca o è scaduta). Nota: `tsx watch` NON ricarica il .env modificato:
+#      dopo averlo creato/cambiato riavvia davvero il processo (pkill del
+#      server + `pnpm dev` di nuovo).
+
+# 4) Avvia il server di sviluppo
+pnpm dev
+# → l'app è su http://localhost:3000
+```
+
+**Verifiche di qualità:**
+
+```bash
+pnpm check      # type-check TypeScript (tsc --noEmit) → deve dare 0 errori
+pnpm test       # test unitari (vitest)
+```
+
+**Produzione:**
+
+```bash
+pnpm build      # compila client (vite) + server (esbuild) in dist/
+pnpm start      # NODE_ENV=production node dist/index.js
+```
+
+## 3. Variabili d'ambiente (`.env`)
+
+| Variabile | Obbligatoria | Descrizione |
+|---|---|---|
+| `DATABASE_URL` | No | Database **PostgreSQL** per auth/funzioni di sistema. Il cuore dell'app non lo usa (in sviluppo puoi lasciarlo vuoto) |
+| `BETTER_AUTH_SECRET` | No | Segreto sessioni Better Auth (`openssl rand -base64 32`) |
+| `TRUSTED_ORIGINS` | No | Origini attendibili (in produzione: il dominio) |
+| `EASY_PEASY_API_KEY` | **Consigliata** | Chiave Easy-Peasy.AI per **traduzione e colorazione IA**. Se assente NESSUN errore visibile: l'app ricade SILENZIOSAMENTE su traduzione MyMemory + colorazione «regole» grammaticali (fonte `colorSource: "regole"` nell'endpoint `latino.translate`) — il badge nell'app resta comunque informativo, ma l'utente potrebbe non accorgersene |
+
+## 4. Mappa dei file (per ricrearla identica)
+
+> ♿ **Accessibilità**: vedi [`ACCESSIBILITA.md`](ACCESSIBILITA.md) — recap completo delle misure e guida al riuso.
+
+| Funzione | File |
+|---|---|
+| Pagina di ingresso (card studente + ENTRA) | `client/src/pages/WelcomePage.tsx` |
+| Pagina principale (tutta la UI; header centrato SENZA pulsante quaderno, sfondo `#f8f1e4`) | `client/src/pages/Home.tsx` |
+| Footer condiviso (IDENTICO su tutte le pagine) | `client/src/components/AppFooter.tsx` |
+| Barra di accessibilità (Font, Interlinea, Righello, Modalità, Ascolto) | `client/src/components/AccessibilityToolbar.tsx` |
+| Sincronizzazione altezza embed (protocollo labvisivo:height) | `client/src/lib/heightSync.ts` |
+| Procedure API | `server/routers.ts` → `latino.analyze`, `latino.translate` |
+| Motore di analisi (Whitaker + mappatura colori) | `server/analyzer/` (`index.ts`, `whitaker.ts`, `mapper.ts`, `collatinus.ts`) |
+| Glossario italiano | `server/analyzer/itGloss.ts`, `itGlossExtra.ts`, `itGlossVerbs.ts`, `data/` |
+| Esportazione PDF | `client/src/lib/export.ts` |
+| OCR (foto/PDF → testo) — **dettaglio in [`OCR-FOTO.md`](OCR-FOTO.md)** | `client/src/lib/ocr.ts`, `ocrClean.ts`, `imagePrep.ts` |
+| Ritaglio foto prima dell'OCR (modale «Ritaglia la foto» senza sottotitolo) — **dettaglio in [`OCR-FOTO.md`](OCR-FOTO.md)** | `client/src/components/CropDialog.tsx`, `client/src/lib/cropBox.ts` |
+| Tipi condivisi | `shared/types.ts` |
+| Stili globali + font + override `lf-embedded` | `client/src/index.css` |
+| Client tRPC | `client/src/lib/trpc.ts` |
+| Schema database (non usato dal cuore) | `drizzle/schema.ts` + migrazioni `drizzle/` |
+| Embed iframe per Blogger | `cornice-dinamica/embed-latino-facile-dedicata.html` (⭐ dedicata ~18 KB, **v3 impermeabile + anti-loop**: titolo e pulsanti sulla stessa riga, tutti centrati; Schermo intero, Ricarica, stato online/errore con Riprova, spinner, isolamento tra istanze, stabilizzazione dell'altezza anti-crescita-infinita), `cornice-dinamica/embed-latino-facile-lite.html` (leggera ~5 KB, universale: si riusa cambiando `APP_URL`), `cornice-dinamica/embed-universale.html` (template generico) e `cornice-dinamica/embed-latino-facile.html` (autosufficiente ~110 KB, font base64) |
+| **ACCESSIBILITÀ** (recap misure + riuso) | `ACCESSIBILITA.md` |
+| Font OpenDyslexic (ad alta leggibilità) | `client/public/fonts/OpenDyslexic-*.{ttf,otf,woff2}` + `@font-face` in `client/src/index.css` |
+| Barra di accessibilità (Font, Interlinea, Righello, Modalità, Ascolto) | `client/src/components/AccessibilityToolbar.tsx` + `client/src/contexts/AccessibilityContext.tsx` |
+| Lettura ad alta voce (text-to-speech, modulo Ascolto → Leggi) | `client/src/hooks/useReadAloud.ts` |
+| CORS font per embed (`Access-Control-Allow-Origin: *` su `/fonts/*`) | `server/_core/index.ts` |
+| Regole accessibilità (righello, alto contrasto, focus, riduzione movimento) | `client/src/index.css` (`.lf-ruler-band`, `html.lf-hc`, `:focus-visible`, `prefers-reduced-motion`, `--lf-scale`, `--lf-lh`) |
+| Font per il PDF | `client/public/fonts/OpenDyslexic-Regular.ttf` + `OpenDyslexic-Bold.ttf` (incorporati da `export.ts` nel PDF) |
+| Dati OCR latino | `client/public/tessdata/lat.traineddata.gz` |
+
+## 5. Comportamenti da replicare ESATTAMENTE (punti di personalizzazione)
+
+1. **Font**: tutto il testo usa lo stack `"OpenDyslexic", "Cambria", "Times New Roman", Georgia, serif` (classi `font-display` in `index.css`). **OpenDyslexic è il font PRINCIPALE** (misura di accessibilità — vedi `ACCESSIBILITA.md` §2.1): non cambiarlo né rimuoverlo.
+2. **Header e footer**: l'app **NON ha footer** (nessun "REALIZZATO DA…" in fondo) e **NON ha più l'header con il titolo** "LATINO FACILE" (rimosso da `Home.tsx` su richiesta esplicita dell'utente, 26/10: la pagina `/app` inizia direttamente con la card di input; il titolo resta solo in `WelcomePage.tsx` e nel `<title>`); la barra di accessibilità è **bianco caldo `#fdfbf8`** con capsule crema `#f5f0e6` (come da foto di riferimento: bordi `#dedbd6`, testo `#2e2118`, pulsanti trasparenti senza pillole bianche) sopra lo sfondo della pagina (`#f8f1e4`).
+3. **Limite input**: `MAX_CHARS = 400` (costante esportata in `Home.tsx`, riga ~267). Applicata sia al textarea (`maxLength`) sia al testo riconosciuto dall'OCR (che viene troncato a 400 caratteri).
+4. **Colori delle categorie**: la legenda e i colori sono definiti in `LEGEND_ITEMS` (`shared/types.ts`, riga ~151): **fonte unica** da cui derivano IDENTICHE la legenda dell'app (`Home.tsx`) e quella del PDF (`export.ts`). 12 voci (SCONOSCIUTO non compare più in legenda; la categoria grigia resta per l'analisi), 3 righe per voce: `label` (caso/modo) → `compl` (testo esplicativo nel colore CHIARO del caso via `lightenColor()`: SOGGETTO, COMPLEMENTO DI SPECIFICAZIONE / DI TERMINE / OGGETTO / DI VOCAZIONE, MEZZO · MODO · CAUSA · LUOGO · TEMPO, PREDICATO VERBALE, **PAROLE DI SERVIZIO** per AVVERBI/PREPOSIZIONI/CONGIUNZIONI) → `sub` (domanda in corsivo o esempi `NUNC = ora · AD = a · ET = e`). Sotto la griglia una **nota sulla voce verbale COLORATA** (`LEGEND_VOICE_NOTE`, parti con `underline` disegnate davvero sottolineate e con `color` per il colore del testo): «IL PREDICATO VERBALE SOTTOLINEATO = VOCE PASSIVA - IL PREDICATO VERBALE NON SOTTOLINEATO = VOCE ATTIVA» — la parte della **VOCE PASSIVA è in ROSSO `#C62828`** (`VOICE_PASSIVE_COLOR`, incluso il SOTTOLINEATO sottolineato) e la parte della **VOCE ATTIVA in VERDE `#2E7D32`** (`VOICE_ACTIVE_COLOR`); il separatore « - » resta nel colore standard `#2e2018`; sottolineatura SOLO sul primo SOTTOLINEATO; identica in APP e PDF (nel PDF il font della nota si restringe per entrare nei margini e usa `part.color ?? "#2e2018"`) e, sotto, i casi della griglia portano `numero: true` e diventano DUE voci: «CASO SINGOLARE» con la sfumatura chiara e «CASO PLURALE» con quella scura (due quadratini, stessa riga), identiche in app e PDF. Ogni **parola declinabile** (nome, aggettivo, pronome, numerale — `DECLINABILI`/`numeroPerSfumatura` in `shared/types.ts`) distingue il numero con la **SFUMATURA del colore** (`TokenAnalysis.number` → `shadeForNumber`): **più CHIARA = singolare, più SCURA = plurale** dello stesso colore di base — nei chips dell'app, nel PDF (lettere colorate) e nelle voci della legenda; verbi e invariabili restano del colore pieno. Il numero resta nei dati per distinguere le opzioni con lo stesso caso (es. «currus»). Il colore scelto a mano (`coloreFinale` in `ExportToken`) è FINALE: nessuna sfumatura sopra. La **palette del cambio colore** (`COLOR_PALETTE` in `Home.tsx`) è DERIVATA da `LEGEND_ITEMS` con `shadeForNumber` (le due sfumature per ogni caso + indicativo, congiuntivo, altri modi, avverbi, preposizioni, congiunzioni, — nessuna voce extra: il dialogo offre esattamente i colori della legenda): palette e legenda restano identiche per costruzione. L'evidenziazione del colore corrente è PER VOCE, non per colore: `vocePerAnalisi` (dall'analisi grammaticale) o l'ultima voce scelta a mano (`overrideVoci`), così solo la categoria scelta si evidenzia, indipendentemente dalla tinta. La nota generica sul numero non esiste più: le due voci per caso sono autoesplicative. INDICATIVO è **arancione `#EF6C00`** (distinto dal rosso del nominativo); CONGIUNTIVO è **magenta `#AD1457`** (distinto dall'indaco `#3949AB` del VOCATIVO); AVVERBI **blu intenso `#0057D9`**, PREPOSIZIONI **grigio chiaro `#BDBDBD`**, CONGIUNZIONI **grigio scuro `#4A4A4A`**, con compl «PAROLE DI SERVIZIO» ed esempi rispettivi; la voce ALTRI MODI VERBALI (marrone #795548) porta `compl` PREDICATO VERBALE.
+5. **PDF esportato** (`export.ts`): ogni parola è disegnata **grande, in grassetto, con il colore della categoria** (`font: bold`, testo colorato) — **MAI** dentro riquadri/rettangoli colorati. I verbi **passivi** (`voice: "passivo"` su `ExportToken`, dall'analisi morfologica) sono **SOTTOLINEATI** con una linea nello stesso colore della parola (come i chip nell'app). Una frase per riga. **Nessuna intestazione** (le scritte "LATINO FACILE — FRASE COLORATA" e "REALIZZATO DA ANDREA CENTINARO" NON devono comparire nel PDF).
+6. **Traduzione e colorazione IA** (`routers.ts` → `latino.translate` / `recolor`) — **26/10c: SOTTOLINEA LA PAROLA in FONDO allo specchietto del colore** (dopo la griglia, non sopra); **IA FUNZIONANTE e prioritaria** (verifica 26/10: FRASE LATINA vera: source: ai + colorSource: ai con Piratarum genitivo pl. / Minotaurum accusativo / totidemque accusativo con QUE grigio; stessa frase in produzione: identico risultato; la stringa italiana 'La fanciulla ama l ancella.' va in auto/regole PERCHÉ NON È LATINO — non è un bug. Sequenza chiamate translate: (1) verifyWithAI traduzione+ruoli 35s → (2) se mancano i ruoli, assignRolesWithAI 20s → (3) DeepL/MyMemory/glossario + verifica IA 30s + fallback ruoli 20s. L'opzione generica sintetizzata colora PIRATARUM/MINOTAURUM/TOTIDEMQUE col caso IA o desinenze); **26/10b: MAX_PAROLE = 50** (`Home.tsx`); **sottolineatura manuale** (nel dialog colore di ogni parola il pulsante SOTTOLINEA LA PAROLA / TOGLI LA SOTTOLINEATURA — `underlineOverrides` in `Home.tsx`, vincono sulla voce dell'analisi anche nel PDF); **fallback DESINENZE** (`guessFromEnding` in `translationColors.ts`: parole sconosciute a Whitaker E all'IA colorate dalla desinenza — -arum/-orum → genitivo plurale, -um/-am/-em → accusativo, -os/-as → accusativo plurale, -ibus → ablativo plurale, -us/-a → nominativo — con divisione dell'enclitica attaccata, es. TOTIDEMQUE; le parole intere atque/neque/itaque/denique/quoque NON vengono divise); opzione generica sintetizzata per OGNI parola sconosciuta con ruolo (IA o desinenze) invece di restare bianca; — **26/10: parole non riconosciute = CHIP BIANCO con SCRIITTA NERA** (`POS_COLORS.sconosciuto = #FFFFFF` + `UNKNOWN_TEXT_COLOR = #1a1a1a` in `shared/types.ts`; nel PDF, dove le lettere sono colorate senza sfondo, queste parole si disegnano in nero perché lettere bianche su pagina bianca sarebbero invisibili), **enclitiche** (es. TUTAMQUE = TUTAM + QUE: il JSON IA include l'oggetto opzionale `enclitiche` `{"tutamque": {"base": "accusativo", "enclitica": "congiunzione"}}`; `applyRoleOverrides` assegna alla parola il caso della BASE (con opzione generica sintetizzata se Whitaker non la conosce) e le lettere del suffisso prendono il PROPRIO colore (`TokenAnalysis.suffisso`: QUE grigio ardesia #455A64 delle congiunzioni, CUM grigio delle preposizioni — sfondo del chip interamente del caso della base, nel PDF le lettere si disegnano in due segmenti) e **regole di precisione nel prompt** (nomi propri con SEMPRE un caso dedotto da desinenza/contesto, aggettivi/pronomi/numerali SEMPRE concordi con il nome): l'IA usa `generateText` (`server/_core/llm.ts`). I template `/api/generate` (preset `custom-generator`) possono andare in **quota token (401)**; in quel caso `generateText` passa automaticamente a **chat Gemini** (`server/_core/chat.ts`, `gemini-3-flash`, stessa `EASY_PEASY_API_KEY`). Se anche la chat fallisce (chiave assente) si usa DeepL → MyMemory → glossario. La colorazione IA (`assignRolesWithAI` / `verifyWithAI`) segue lo stesso canale. **Le frasi sono processate a CHUNK di 2 con chiamate parallele (ondate di 4) e output «Long»** (`verifyAI.ts`): in una sola chiamata il JSON superava max_tokens («Medium» = 800 token), si troncava e con più frasi la colorazione restava «regole» pur avendo risposto l'IA. Cache in memoria per chunk (si rifanno solo i chunk falliti); fallback «solo ruoli» (20 s) quando il JSON combinato traduzioni+ruoli non contiene ruoli validi. Timeout: primo giro IA 35 s, verifica post-percorso-automatico e `recolor` 30 s. Le risposte IA includono anche i **numeri** (`numeri`: singolare/plurale per parola) per l'apice S/P; `applyRoleOverrides` usa il numero per scegliere l'opzione giusta quando lo stesso caso esiste in entrambi i numeri (es. «currus» nominativo singolare E plurale). Senza questa fallback l'app resta su «Colorazione con regole» / «Traduzione automatica» anche con la chiave presente.**26/10d** — (1) Banner «Parole non riconosciute» ELIMINATO per sempre (nessun caso lo mostra più): le parole non riconosciute restano chip BIANCO con scritta nera. (2) Nuova nota sotto la legenda voce (UI e PDF): «Le parole non riconosciute dall'IA sono contrassegnate dal colore bianco» (nel PDF con quadratino bianco bordato). (3) Enclitiche col colore OPPORTO alla parola principale (26/10): principale bianca → enclitica NERA; principale scura → enclitica BIANCA; nel PDF le lettere sono colorate su pagina bianca quindi base CHIARA → enclitica nera, base scura → enclitica grigio ardesia (enclDrawColor in export.ts). Sicurezza: su chip bianco (parola sconosciuta) l'enclitica resta scura. (4) PDF: numeri di pagina SOLO il numero centrato in basso e SOLO con più di una pagina (i chiamanti ora passano sempre true; buildPdfBlob controlla getPageCount()>1); spaziature compattate (sentenceGap 20, legenda 24, traduzioni 14) per stare su UNA pagina quando possibile — verificato: 1 frase+legenda = 1 pagina senza numeri; 4 frasi+traduzioni lunghe = 2 pagine numerate 1,2. **26/10e**: le due scritte sotto la legenda sono più distanziate dalla casistica colorata (UI mt-10/mt-3; PDF gap 40 pt, `ny = ly - rowsTotalH - 40`).
+
+6-bis. **GUARDIA VOCATIVO 26/10e** (`applyVocativoGuard` in `translationColors.ts`, esportata): distinguere nominativo e vocativo (molto simili, es. FILII in «Este viri filii… tolerate»). La funzione, richiamata come pre-pass dentro `applyRoleOverrides` e ESPLICITAMENTE in `routers.ts` (percorso regole con ruoli vuoti + endpoint `analyze`), se la frase ha un verbo all'imperativo e NESSUN indicativo/congiuntivo corregge in «vocativo» ogni nome flessibile con ruolo «nominativo», senza ruolo o già «vocativo» dall'IA; se Whitaker non dichiara l'opzione vocativo (viri, filii → solo nominativo/genitivo) la SINTETIZZA clonando quella del nominativo (indispensabile: senza sintesi il ruolo vocativo non verrebbe mai applicato); i nomi retti da preposizione NON vengono convertiti (prev = categoria «preposizione» o word in `PREP_FORMS`). I prompt IA (verifyAI.ts, ENTRAMBI i blocchi) contengono la regola «NOMINATIVO vs VOCATIVO — MASSIMA ATTENZIONE» con esempio obbligatorio e la regola anti-predicato-del-nominativo dopo Este/Estote — non rimuoverle. Verificato: viri/filii VOCATIVO in analyze e translate; **26/10f (correzione utente)**: in «Este viri filii…» VIRI è il PREDICATO di «este» («siate UOMINI» → nominativo) e SOLO FILII è vocativo («o figli») — la guardia esclude il primo nome dopo copula imperativa (`COPULA_IMP_FORMS` = es/este/esto/estote) e i prompt IA adesso lo insegnano con l'esempio corretto; «Puella ancillam amat.» / «divitiae» restano nominativo; «cum patientia» resta ablativo. **26/10u**: (1) Box traduzione SEMPRE allineato a sinistra (`text-left` invece di `text-justify`, come la textarea principale). (2) IA per i testi LUNGHI (quasi 200 parole) su mobile: `aiVerifyTimeout(n)` proporziona il timeout alle frasi (min 90 s, 20 s + 6 s/frase — il tetto fisso di 35/30 s tagliava fuori i testi lunghi); RISULTATO IA PARZIALE ACCETTATO nel livello 1 (`some` invece di `every` sulle righe: un solo chunk fallito scartava tutto e ricadeva su REGOLE) con merge `aiLine ?? fallback` (overrides → DeepL → MyMemory → glossario); retry singolo dei chunk falliti dentro `verifyWithAI` (pausa 600 ms); niente ritorno anticipato: colorazione costruita a fine su tutte le frasi; `source` onesto («ai» se l'IA copre almeno metà delle frasi **26/10w-x (CAUSA RADICE MISURATA colorazione/traduzione IA su mobile)**: `generateTextViaChat` (server/_core/llm.ts) usava max_tokens 400/800/1200: Gemini 3 Flash spende centinaia di token in ragionamento che contano nel limite e il JSON (traduzioni + ruolo di ogni parola) veniva TRONCATO → parseVerification null → colorazione REGOLE. Ora 2500/5000/8000. Latenza: dominata dai token in uscita (~80 tok/s; reasoning_effort non cambia nulla) → CHUNK_SIZE 1 (una frase per chiamata, MAX_PARALLEL 8): testi da 30-40 parole 7-15 s con source=ai/colorSource=ai (prima 17-36 s o REGOLE). Nota: l'errore 429 «limit of allowed words» riguarda i template /api/generate; il fallback chat Gemini funziona. **26/10v**: CAUSA RADICE dei testi lunghi con REGOLE individuata con test locale: l'API AI risponde 429 «You reached the limit of allowed words in your plan» — la quota di parole del piano si esaurisce; il prompt di verifyChunk pesa ~1100 parole e con CHUNK_SIZE 2 veniva ripetuto 8 volte per 16 frasi (~8800 parole per una colorazione). Fix: CHUNK_SIZE 4 (metà chiamate), flag modulo `aiQuotaHit`/`aiQuotaExhausted()` che ferma chunk rimanenti e retry dei router sul 429 (azzerato a ogni nuova verifyWithAI). NB: quando la quota è esaurita l'app cade su regole/DeepL finché la quota non torna — è un limite di piano, non di codice.). Le frasi IA non passano da `fixMtVerb` (già corrette). **26/10u-bis**: BUDGET HTTP TOTALE 92 s sulla traduzione (`remainingMs`) — il deploy di mezzogiorno andava in 524 Cloudflare (origine > 100 s) perché il timeout adattivo arrivava a 90 s e poi partiva anche la seconda verifica: ora i timeout IA sono capati dal budget (`min(90s, budget)`), la verifica del percorso automatico si salta se il livello 1 ha già dato frasi IA, e i passi sotto 15 s di budget vengono saltati. **26/10t**: (1) Pulsante azzurro «COLORA FRASE CON IA»: su mobile occupa tutta la larghezza della card (`w-full max-w-[340px]`), testo centrato che può andare a capo (`whitespace-normal leading-snug`, tracking ridotto) — prima la scritta larga con `tracking-widest` sforava i margini; su desktop resta a misura naturale (`sm:w-auto`). (2) Testata traduzione: su mobile scritta «TRADUZIONE IN ITALIANO» e pillola «TRADOTTA CON IA» SEMPRE centrate e impilate (`flex-col items-center`) — prima `justify-between` le lasciava una a sinistra e una a destra; su desktop resta la riga affiancata (`sm:flex-row`). (3) ANTI-TREMOLIO cornice dinamica (heightSync.ts): altezza ARROTONDATA a multipli di 8 px + TOLLERANZA di 12 px (isteresi, sotto non si invia nulla) + ResizeObserver con debounce 150 ms — così le micro-variazioni di 1-2 px (font, arrotondamenti, scrollbar) non innescano più il loop ping-pong di resize con la cornice. **26/10s**: (1) Eliminata la scritta spuria «Tutto lo specchietto...» in fondo allo specchietto TAGLIA I MARGINI: era un commento scritto in sintassi JS dentro i figli JSX di CropDialog (26/10r), quindi React lo RENDERIZZAVA come testo visibile — ora è un commento JSX `{/**/}`. (2) Traduzione IA anche nel percorso automatico: doppio tentativo `verifyWithAI` anche dopo DeepL/MyMemory (retry solo su fallimento rapido < 30 s, pausa 800 ms) e retry client esteso: scatta anche quando la COLORAZIONE è già IA ma la TRADUZIONE resta «auto»/«glossario» (controllo `translate.data.source !== "ai"`), così il secondo tentativo corregge le righe in IA. **26/10r**: (1) RIMOSSO l'autosalvataggio del testo (`LAST_TEXT_KEY`/`latino-facile-ultimo-testo` cancellato: il draft vive solo in memoria, il riquadro resta vuoto finché l'utente non scrive o fotografa — così il testo fotografato da mobile non finisce più nel riquadro desktop; lo studente resta salvato separatamente in `latino-facile-studente` e NON è toccato. (2) Specchietto «TAGLIA I MARGINI DELLA FOTO» (CropDialog) interamente beige: `card-paper` + `bg-[#fffdf6]` su contenuto e footer (prima il footer era `#fdfbf8/80`). **26/10q** — Colorazione IA su mobile, difesa STRUTTURALE a doppio livello: (1) SERVER (routers.ts, translate): **doppio tentativo IA** — se la prima chiamata `verifyWithAI` fallisce per errore transitorio (quota/rate limit/rete) si riprova una volta dopo 800 ms; il retry parte SOLO se il primo tentativo è fallito velocemente (< 30 s), dopo un timeout pieno non si riprova. (2) CLIENT (Home.tsx): **retry automatico «REGOLE» → IA** — se dopo l'arrivo della traduzione il colore finale resta `regole` (colorSource === "regole", translate non pending), dopo 2,5 s si richiama `translate` una sola volta per testo (`retryTranslateRef`, azzerato a ogni nuova analisi in run()); se il secondo tentativo porta i ruoli IA, i colori e il badge passano a IA senza che l'utente rifaccia nulla. Vedi anche 26/10o (fix race useEffect). **26/10p** — Pulsante «SALVA TRADUZIONE NEL PDF»: scritta portata a **`text-base` (16 px) su OGNI schermo**, esattamente come CHIUDI I CAMPI / NASCONDI TRADUZIONE / SCARICA IL PDF (tutti `rounded-full px-6 py-4 text-base font-bold`); pulsante nel complesso leggermente più piccolo di prima: `px-4 py-3` (mobile), `sm:px-5 sm:py-3.5` (desktop), interlinea `leading-snug`. Mantenuti `h-auto` (26/10m, necessario per il testo su due righe) e `max-w-full whitespace-normal!`. **26/10o** — FIX RACE colorazione «REGOLE» su mobile: il useEffect che applica i colori IA (translate.data.coloredSentences) dipendeva SOLO da translate.data; se la traduzione IA arrivava un istante PRIMA che result fosse pronto (batch analyze+translate via httpBatchLink, rendering più lento su telefono), l'effetto usciva presto (!result) e non veniva MAI rieseguito → frasi colorate dalle REGOLE per sempre. Fix: effetto dipende da [translate.data, result] con appliedTranslateRef che impedisce di riapplicare la STESSA risposta (non sovrascrive recolor/override utente). In più retry:1 sulla mutazione translate (rete mobile instabile). FLUSSO INVARIATO e identico su OGNI dispositivo: colorazione immediata = regole (feedback istantaneo), poi i colori IA la sostituiscono appena pronta. Scritta del pulsante corretta: «SALVA TRADUZIONE NEL PDF» (senza «LA»).
+
+6-ter. **Novità 26/10g**: (1) **Forme in -OS** (servos, dominos, amicos…): Collatinus offre solo il «nominativo singolare» arcaico e non l'accusativo plurale — la regola 00 di `refineSentence` (server/analyzer/index.ts) aggiunge l'opzione ACCUSATIVO PLURALE per le parole in -os con lemma 2ª decl. in -us e la rende default (esclusi os/mos/flos/dos e grecismi); prompt IA con regola «ACCUSATIVO PLURALE in -OS — MAI nominativo singolare» in entrambi i blocchi di verifyAI.ts. (2) **Scrolling finestre**: ColorDialog con `max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain`; CropDialog wrapper foto `touch-pan-y` (le maniglie restano `touch-none`). (3) **Parole non riconosciute**: chip NERO con scritta bianca (`POS_COLORS.sconosciuto = #000000`), nota legenda «…dal colore nero» in app e PDF (quadratino nero); nel PDF lettere nere (UNKNOWN_TEXT_COLOR), check `#FFFFFF` → `#000000` in export.ts. **26/10h**: nel PDF il gap legenda→scritte è 16 pt (`ny = ly - rowsTotalH - 16`, `needed` +20); l'app resta mt-10/mt-3. **26/10i — NOTA STORICA SUPERATA per CropDialog dal deploy 8728: usare modal={true}, hook viewport e SCROLLING-MOBILE.md; ColorDialog distinto.** — (1) SCROLLING MOBILE delle due finestre: ColorDialog (Home.tsx) e CropDialog (CropDialog.tsx) ora `modal={false}` — la pagina dietro resta SCORRIBILE col dito mentre la finestra è aperta (il lock del modale Radix bloccava tutto lo scrolling su mobile); il contenuto interno resta scorrevole (ColorDialog `max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain`, CropDialog inner `overflow-auto overscroll-contain` + wrapper foto `touch-pan-y` con maniglie `touch-none`); chiusura invariata (X, ANNULLA, tocco fuori). (2) PULSANTE «SALVA LA TRADUZIONE NEL PDF» fuori margine su mobile: la base Button ha `whitespace-nowrap`+`shrink-0` e l'etichetta lunga non poteva restringersi — fix con `max-w-full whitespace-normal!` e taglie responsive `px-4 py-2.5 text-sm sm:px-6 sm:py-4 sm:text-base`. **26/10l** — Pulsante «SALVA LA TRADUZIONE NEL PDF»: su mobile i margini sopra/sotto erano ancora troppo stretti — `py-3` → `py-4` e `leading-snug` → `leading-relaxed` (desktop invariato: `sm:py-4 sm:text-base sm:leading-snug`). **26/10j** — (1) FIX REGRESSIONE: il `modal={false}` del ColorDialog (Home.tsx) era andato PERSO (rimaneva solo sul CropDialog) — per questo la finestra con le pillole colorate bloccava ancora lo scrolling su mobile mentre quella della foto scorreva bene; riapplicato e verificato con grep (linea `<Dialog ... modal={false}>` in ENTRAMBI i file); aggiunto anche `overflow-x-hidden` al DialogContent del ColorDialog per evitare che un eventuale overflow orizzontale intrappoli il gesto. (2) Pulsante «SALVA LA TRADUZIONE NEL PDF»: più respiro interno su mobile `px-5 py-3 leading-snug` (prima px-4 py-2.5, testo attaccato ai bordi); desktop invariato (sm:px-6 sm:py-4 sm:text-base). **26/10m** — FIX RADICE pulsante «SALVA LA TRADUZIONE NEL PDF»: la base Button (size default) ha **`h-9` (altezza fissa 36 px)** che annullava qualunque `py-*` e comprimeva il testo su due righe dentro i 36 px — per questo 26/10l (py-4) era sembrato «peggiorato». Fix: aggiunto **`h-auto`** al className, così il padding verticale `py-4` (+ leading-relaxed) agisce davvero e la scritta respira sopra e sotto. Desktop invariato (sm:py-4 sm:text-base sm:leading-snug). LEZIONE: per pulsanti con testo su più righe serve sempre `h-auto`, non solo il padding. **26/10n** — (1) Pulsante «SALVA LA TRADUZIONE NEL PDF»: font size 14 pt (`text-sm`) SU OGNI schermo, come tutti gli altri pulsanti dell'app (rimosso `sm:text-base`/`sm:leading-snug`; mantenuti `h-auto`+`py-4` del 26/10m). (2) Textarea «Scrivi una o più frasi in latino» (Home.tsx): testo SEMPRE allineato a sinistra — rimosso `text-justify`, messo `text-left` (richiesta con foto: il giustificato era illeggibile in digitazione e per testo da foto/OCR); il pannello di traduzione resta giustificato come prima. **26/10n** — (1) Pulsante «SALVA LA TRADUZIONE NEL PDF»: scritta a **text-sm (14 pt) anche su desktop** (rimosso `sm:text-base`) come tutti gli altri pulsanti dell'app. (2) Riquadro «Scrivi una o più frasi in latino» (Textarea, Home.tsx ~linea 931): `text-justify` → `text-left` — il testo (scritto a mano o trascritto dall'OCR della foto) è SEMPRE allineato a sinistra. Il box della traduzione (linee 1183/1185) resta giustificato, com'era. **26/10k** — nuova guida radice **`SCROLLING-MOBILE.md`**: guida IA completa e clonabile dello scrolling mobile delle finestre (3 problemi/soluzioni; Pattern A = CropDialog a 3 fasce con corpo `min-h-0 flex-1 overflow-auto overscroll-contain` e foto `touch-pan-y` + maniglie `touch-none`; Pattern B = ColorDialog `overflow-x-hidden overflow-y-auto`; pulsanti a lunga etichetta; checklist §5 con grep anti-regressione; mini-pacchetto di riuso §6). Agganciata in README, AGENTS, ADATTARE, ACCESSIBILITA §3, OCR-FOTO e manifest.json.
+
+7. **UI traduzione** (`Home.tsx`): pulsante **MOSTRA TRADUZIONE** → mostra il riquadro "Traduzione in italiano" (una riga per frase) e il pulsante diventa **NASCONDI TRADUZIONE**; secondo clic → nasconde. Durante il caricamento: "Traduzione in corso…".
+8. **OCR**: vedi la sezione dedicata **[`OCR-FOTO.md`](OCR-FOTO.md)** (flusso scatto → EXIF → ritaglio → pretrattamento → Tesseract, file da copiare, Render). In sintesi: tesseract.js carica `lat.traineddata.gz` da `/tessdata/` (niente CDN); `imagePrep.ts` raddrizza EXIF e stira il contrasto; `PSM.SINGLE_BLOCK` + `user_defined_dpi=300`; limite file 18 MB.
+9. **Pulsanti principali dell'app**: «**COLORA FRASE CON IA**» (stile azzurro del Widget metacognitivo, come il suo «COSTRUISCI L'ESERCIZIO CON L'IA»: `bg-sky-50 hover:bg-sky-100 border border-sky-300 text-sky-900`, icona robot `Bot` di lucide-react a sinistra del testo; durante l'analisi mostra «L'IA STA COLORANDO…» con spinner; ex «COLORA FRASE» rosso con bordo scuro — cambiato il 26/10, NON ripristinare il rosso), «MOSTRA/NASCONDI TRADUZIONE» e «**SCARICA IL PDF**» (testo esatto; ex «SCARICA FRASE IN PDF») che genera il PDF colorato con `export.ts`. **Nessun pulsante al quaderno**: `PDF_LINK` e i pulsanti "IL QUADERNO PDF" sono stati rimossi; i file `quaderno-unico-v*.pdf` in `client/public/` sono solo asset storici (NON reintrodurre pulsanti/link senza richiesta esplicita dell'utente).
+10. **Stile pulsanti**: pulsanti arrotondati (`rounded-full`), testo maiuscolo in grassetto, bordi colorati — mantenere lo stesso stile.
+11. **ACCESSIBILITÀ (non rimuovere)**: font OpenDyslexic come font principale (`body` e `.font-display` in `index.css`); barra di accessibilità renderizzata una volta sopra il router (dentro `AccessibilityProvider`); variabili CSS `--lf-scale` (dimensione testo, body `calc(18px * var(--lf-scale, 1))`) e `--lf-lh` (interlinea, default 1.65); classi `html.lf-ruler` (righello) e `html.lf-hc` (alto contrasto); `:focus-visible` con outline 3px rosso; `@media (prefers-reduced-motion: reduce)`; `::selection` ad alto contrasto; `aria-label`/`aria-pressed`/`role="toolbar"`/`aria-live` sui controlli; `localStorage` (chiave `lf_access`) per persistere le preferenze; **lettura ad alta voce** con `useReadAloud.ts` (Web Speech API, voce italiana, pulsante Ascolto → Leggi nella barra). Tutto il dettaglio in `ACCESSIBILITA.md`.
+12. **Tool foto (trapianto 26/10 dal Widget metacognitivo per espressioni)**: SOTTO il campo di testo ci sono SOLO i due pulsanti terracotta `#a85b3c` a pillola (`rounded-full`, testo bianco, larghezza piena, `max-w-md`): «**SCATTA UNA FOTO DEL TESTO**» (icona `Camera`, `capture="environment"` → fotocamera posteriore, durante la lettura mostra «LETTURA DELLA FOTO…») e «**CARICA UNA FOTO**» (icona `Upload`, selettore file immagini). NESSUN riquadro tratteggiato di upload, NESSUN drag&drop, NESSUN Ctrl+V, NESSUNA gestione PDF, NESSUN testo «Clicca per scegliere…/JPG…/Oppure premi…/Inquadra il testo…» (rimossi il 26/10, NON reintrodurli). Flusso (stile Widget): `handleFotoFile` (max 18 MB, solo immagini) → `normalizePhoto` (EXIF) → `CropDialog` (ritaglio) → `onCropConfirmRef` (pattern del Widget per l'ordine delle dichiarazioni) → `runFotoTranscribe`: `fileToScaledDataUrl` (JPEG max lato 1800) → `aiTranscribeImage(..., "photo")` (`POST /api/ai/transcribe` condivisa col Widget, max_tokens 4000) → catch `AiUnavailableError` → soccorso `ocrImage` (Tesseract) → `insertRecognized` (testo nel campo, mai analisi automatica). Server: route REST `POST /api/ai/transcribe` registrata da `registerAiTranscribeRoute` (`server/analyzer/aiTranscribeLatino.ts`, ex `fotoTranscribe.ts`, contratto IA con REGOLE ASSOLUTE adattate al latino); la mutation tRPC `latino.foto` è stata RIMOSSA (non reintrodurla). File: `client/src/lib/aiTranscribe.ts` (copia adattata al latino: `cleanAiLatin`/`aiLatinPlausible`, niente LaTeX), `CropDialog.tsx` + `cropBox.ts` (identici al Widget), `ocr.ts`/`ocrClean.ts` (soccorso locale). Dettaglio del ritaglio (maniglie DENTRO la foto, rotazione 90°, foto piccole ingrandite a schermo fino a 560 px, test) in **[`OCR-FOTO.md`](OCR-FOTO.md)** §3–4.
+13. **Prima pagina e altezza embed** (comportamento corretto, da replicare): la card di ingresso è **compatta** (niente min-height che riempie l'iframe, niente ancoraggio in basso). In **vista autonoma** (`window.self === window.top`) `WelcomePage.tsx` aggiunge a `<html>` la classe `lf-welcome-top`: il body diventa bianco e la pagina "termina" subito sotto la card con una dissolvenza (`::after` in `index.css`) — nessun vuoto crema sotto la card. **Dentro l'iframe** (`heightSync.ts` mette `lf-embedded` su `<html>`): le regole `html.lf-embedded .lf-welcome` azzerano `min-height` e danno `padding-top: 20px` (24px totali con la barra `mb-1`) e `padding-bottom: 24px`, **spazi sopra e sotto la card uguali**. `heightSync.ts` NON usa `documentElement.scrollHeight` come riferimento assoluto (dentro un iframe resta "gonfiato" all'altezza del viewport e la cornice non potrebbe mai restringersi): misura l'altezza reale del contenuto (`body.scrollHeight`/`offsetHeight`, `documentElement.offsetHeight`) e aggiunge lo `scrollHeight` del documento SOLO quando supera il viewport. Così la **cornice dinamica si restringe al contenuto** e non ci sono vuoti né sopra né sotto la card.
+
+## 6. Checklist di verifica finale
+
+- [ ] `pnpm install --frozen-lockfile` termina senza errori
+- [ ] `pnpm check` → 0 errori TypeScript
+- [ ] `pnpm build` → genera `dist/index.js` + `dist/public/`
+- [ ] `pnpm dev` → l'app risponde su `http://localhost:3000`
+- [ ] Scrivendo "Nostrarum regionum vallibus placidi greges pascunt." e premendo COLORA FRASE le parole vengono colorate e sono toccabili
+- [ ] Il PDF scaricato contiene solo le frasi colorate (parole grandi e in grassetto, lettere colorate, niente riquadri, niente intestazione)
+- [ ] MOSTRA TRADUZIONE mostra la traduzione; NASCONDI TRADUZIONE la nasconde
+- [ ] OCR: caricando un'immagine con testo latino, si apre il ritaglio e dopo Conferma il testo viene riconosciuto (checklist completa in [`OCR-FOTO.md`](OCR-FOTO.md) §7)
+- [ ] L'header mostra "LATINO FACILE" centrato SENZA pulsanti di quaderno; in fondo alla pagina NON c'è alcun footer; il pulsante di esportazione si chiama "SCARICA IL PDF" e sotto "COLORA FRASE" NON c'è alcuna linea tratteggiata
+- [ ] La CI (`.github/workflows/ci.yml`) esegue install + check + test + build a ogni push
+- [ ] **Accessibilità**: il font OpenDyslexic si carica da `/fonts/` (DevTools → Network → 200); `Tab` muove il focus con anello rosso visibile; `A−`/`A+` scala il testo 80–160%; Interlinea cicla 1.65→2.6; Righello mostra la banda gialla; Modalità Contrasto sbianca gli sfondi; il pulsante Ascolto → Leggi legge la pagina ad alta voce in italiano (Stop interrompe); le preferenze restano dopo il refresh (`lf_access`); il PDF usa OpenDyslexic (vedi checklist completa in `ACCESSIBILITA.md` §4)
+
+## 7. Deploy su Render (guida completa)
+
+Render è la piattaforma consigliata: la repository include il Blueprint `render.yaml`, quindi il deploy avviene con un clic.
+
+### 7.1 Deploy con Blueprint (consigliato)
+
+1. Carica il progetto su GitHub: crea una repository vuota, poi dalla cartella del progetto:
+
+   ```bash
+   git init && git add . && git commit -m "Latino Facile"
+   git branch -M main
+   git remote add origin https://github.com/<TUO-UTENTE>/latino-facile-app.git
+   git push -u origin main
+   ```
+
+2. Su [render.com](https://render.com) (account gratuito) scegli **New → Blueprint**.
+3. Collega la repository: Render legge `render.yaml` e crea il Web Service con:
+   - build command: `pnpm install --frozen-lockfile && pnpm build`
+   - start command: `pnpm start`
+   - health check path: `/_health`
+   - Node.js 22 (`NODE_VERSION`), `BETTER_AUTH_SECRET` generata automaticamente
+4. Dopo il primo deploy: apri il servizio → **Environment**, imposta `TRUSTED_ORIGINS` col dominio (es. `https://latino-facile.onrender.com`) e, se vuoi, `EASY_PEASY_API_KEY` e/o `DEEPL_API_KEY`. Salva (Render riavvia da solo).
+
+### 7.2 Deploy manuale (senza Blueprint)
+
+Su Render: **New → Web Service** → collega la repo → compila i campi:
+
+| Campo | Valore |
+|---|---|
+| Runtime | Node |
+| Build Command | `pnpm install --frozen-lockfile && pnpm build` |
+| Start Command | `pnpm start` |
+| Health Check Path | `/_health` |
+| Variabile `NODE_VERSION` | `22` |
+
+### 7.3 Note tecniche per Render
+
+- **Porta**: Render imposta `PORT` automaticamente; `server/_core/index.ts` ascolta su `0.0.0.0:${PORT}` in produzione (niente porta fissa da configurare).
+- **pnpm**: Render abilita corepack leggendo `packageManager` in `package.json` → `pnpm@10.4.1`. Il lockfile garantisce installazioni identiche; la patch `patches/wouter@3.7.1.patch` viene applicata automaticamente da pnpm.
+- **Build scripts**: `onlyBuiltDependencies` in `package.json` autorizza i postinstall di `esbuild`, `@tailwindcss/oxide`, `tesseract.js`, `@swc/core`, `sharp`: senza questo il build fallirebbe. NON rimuoverli.
+- **Database**: non serve per le funzioni principali. Per auth e traduzione IA puoi aggiungere un'istanza PostgreSQL (Render o Neon) e impostare `DATABASE_URL`; `drizzle/schema.ts` contiene lo schema, le migrazioni sono in `drizzle/` (da applicare con `pnpm db:push` se usi il database).
+- **OCR e font**: `client/public/tessdata/lat.traineddata.gz` e `client/public/fonts/OpenDyslexic-*.{ttf,otf,woff2}` sono serviti staticamente insieme all'app: nessuna configurazione extra. Il PDF esportato incorpora gli stessi OpenDyslexic (`export.ts`), quindi non servono font PDF separati.
+- **Quaderno PDF**: i pulsanti "IL QUADERNO PDF" e la costante `PDF_LINK` NON esistono più in `Home.tsx` (rimossi): i file `quaderno-unico-v*.pdf` in `client/public/` sono asset storici senza link nell'app. NON reintrodurre pulsanti/link al quaderno senza richiesta esplicita dell'utente.
+
+### 7.4 Altre piattaforme
+
+Stesso comando di avvio (`pnpm start`) su **Railway**, **Google Cloud Run** (endpoint `/_health` già presente) e **qualsiasi VPS**. Build: `pnpm install --frozen-lockfile && pnpm build`.
+
+### 7.5 CI automatica (GitHub Actions)
+
+La repository include `.github/workflows/ci.yml`: a ogni push o pull request verso `main`/`master` esegue `pnpm install --frozen-lockfile`, `pnpm check`, test unitari (`vitest run --passWithNoTests`) e `pnpm build`, e salva `dist/` come artefatto scaricabile (7 giorni). Il workflow usa Node.js 22 e pnpm 10.4.1 (stesse versioni di sviluppo).
+
+## 8. Nota sui file esclusi
+
+Questa repository NON contiene: `.env` (segreti), `node_modules`, `dist/`, database di runtime, script di sviluppo temporanei. Tutto il necessario per la ricostruzione è incluso: sorgenti, `pnpm-lock.yaml`, `patches/` (patch pnpm di wouter, indispensabile), asset OCR/font (inclusi i font OpenDyslexic), `.env.example`, `.github/workflows/ci.yml`, `render.yaml` (Blueprint Render) e la documentazione completa: `README.md` (avvio), `AGENTS.md` (🤖 punto di ingresso per agenti AI), `REBUILD.md` (ricostruzione da zero per agenti AI), `RENDER.md` (🚀 trasferimento Easy-Peasy AI → Render via GitHub), `ADATTARE.md` (creare una nuova app simile, es. inglese, spagnolo o francese) `ACCESSIBILITA.md` (♿ recap delle misure di accessibilità e guida al riuso) e `OCR-FOTO.md` (📷 scatto foto / ritaglio / OCR, riuso su altre app e Render).
+
+ **26/10y**: (1) BUG di 26/10u corretto in `latino.translate`: l'assegnazione incondizionata `lines[i] = OVERRIDE ?? null` azzerava le frasi IA appena inserite → traduzione sempre da DeepL/MyMemory con etichetta «IA» (errori tipo «Catilina» → «Cicerone»). Ora l'override si applica solo se esiste. (2) CropDialog: l'ingrandimento delle foto piccole non supera mai la larghezza disponibile (`min(MIN_IMG_W/lato, availW/natW)`): su mobile l'anteprima era deformata (3:1 mostrata 1,74:1); ora 3,00 → 2,96.
+
+ **26/10z**: la colorazione IA ora restituisce anche il MODO del verbo (verbo=indicativo, congiuntivo, imperativo, infinito, participio) e il TIPO delle parole-funzione (preposizione, congiunzione, avverbio), con regola per l'accusativo con l'infinito. `applyRoleOverrides` (server/analyzer/translationColors.ts) crea opzioni sintetiche per verbi/funzioni che il dizionario non conosce (prima restavano neri). Test su 113 frasi / 462 parole: colori corretti 96,3% -> 99,6% (frasi intere 86,7% -> 98,2%), traduzioni 113/113 accettabili. Errori residui noti: «consules» in «Duo consules Romam regebant» (letto come verbo), «hostes» in «Scio hostes appropinquare» (nominativo invece di accusativo).
+
+ **28/10 (enclitiche)**: (1) rilevamento DETERMINISTICO in `applyRoleOverrides`: pronome+-cum (mecum, tecum, secum, nobiscum, vobiscum, quocum, quacum, quibuscum; base sempre ablativo) e parole sconosciute al dizionario ma note senza -que/-ve/-ne (amasne, rexne): prima l'IA le saltava a volte. (2) Il colore dell'enclitica dipende dalla desinenza: -que/-ve/-ne grigio ardesia (#455A64, congiunzioni), -cum grigio preposizioni (#757575). (3) PDF (`client/src/lib/export.ts`): l'enclitica conserva SEMPRE il grigio della legenda (niente inversione); nell'app resta l'inversione nero/bianco rispetto alla scritta della base. (4) Il limite `word.length > ending.length + 1` permette basi di 2 lettere (te+cum).
+
+ **STATO 28/10 (produzione, deploy 8718)**: versione «ab». QA 113 frasi: colori 99,6%, traduzioni 113/113. Test automatici 53/53 (enclitics.test.ts incluso). Errori noti: «consules», «hostes» in AcI. Quota IA: se esaurita (429) l'app usa le regole (enclitiche non separate). Dopo `pnpm build` ripristinare il Dockerfile con `git checkout Dockerfile` prima di esportare.
+
+ **28/10b-c**: (b) enclitiche senza IA anche quando Collatinus riconosce base+tackon (campo raw «+ ne …»: tutte le opzioni devono partire con lo stesso «+ <tackon>»). (c) `CropDialog.tsx` SINCRONIZZATO con la gemella «Widget metacognitivo per il calcolo di espressioni» (repo GitHub andreakeating1982): finestra interamente beige #f8f1e4 (testata, corpo, footer, specchietto non più nero), bottoni h-11 / text-[14pt] con etichette RUOTA SINISTRA / RUOTA DESTRA, maniglie bordi+angoli usabili da tastiera (frecce 2%, Maiusc 10%), rotazione via canvas PNG lossless, ritaglio in PNG con lato massimo 2200 px. UNICA differenza voluta: mantenuto il clamp 26/10y (ingrandimento foto piccole mai oltre la larghezza disponibile, anti-deformazione mobile) che la gemella non ha. Testi adattati al latino («Lascia solo il testo latino»).

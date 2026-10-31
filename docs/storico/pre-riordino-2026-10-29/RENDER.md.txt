@@ -1,0 +1,198 @@
+# 🚀 Trasferire l'app da Easy-Peasy AI a Render (via GitHub)
+
+> Questa guida spiega **tutto il percorso** per portare «Latino Facile» dalla
+> piattaforma Easy-Peasy AI (dove è stata generata e testata) su **Render**,
+> dove può vivere in modo permanente e indipendente, usando **GitHub** come
+> ponte. È pensata per essere eseguita da una persona **senza competenze
+> tecniche avanzate** (insegnante, docente) oppure da un **agente AI**.
+>
+> 📦 Il pacchetto ZIP esportabile è già una **repository GitHub pronta**:
+> contiene codice sorgente, lockfile pnpm, patch, asset (OCR, font, quaderno
+> PDF), CI (`.github/workflows/ci.yml`) e il **Blueprint Render**
+> (`render.yaml`). Devi solo: caricarla su GitHub → collegarla a Render.
+
+---
+
+## 1. Il percorso in una riga
+
+**Easy-Peasy AI → ZIP (questa cartella) → GitHub (repository) → Render (Blueprint) → dominio pubblico `https://<nome>.onrender.com`**
+
+Ogni `git push` futuro su `main` farà automaticamente: **CI** (GitHub Actions:
+check + test + build) + **deploy su Render** (`autoDeploy: true` nel Blueprint).
+
+---
+
+## 2. Cosa serve prima di iniziare
+
+| Risorsa | Dove | Costo |
+|---|---|---|
+| Un account **GitHub** | https://github.com | Gratuito |
+| Un account **Render** | https://render.com (sign up con GitHub) | Gratuito (piano Free) |
+| Il **pacchetto ZIP** di questa app | la cartella in cui ti trovi | — |
+
+> 💡 Consiglio: accedi a Render **con lo stesso account GitHub**, così la
+> connessione della repository è immediata (nessun token da generare).
+
+---
+
+## 3. Passo 1 — Creare la repository su GitHub
+
+1. Su [github.com](https://github.com) → **+** → **New repository**.
+2. Nome: `latino-facile-app` (o quello che preferisci, es. `english-facile-app`
+   se stai adattando l'app a un'altra lingua — vedi [`ADATTARE.md`](ADATTARE.md)).
+3. Visibilità: **Private** o **Public** (a scelta; se vuoi usare il pulsante
+   «Deploy to Render» con un clic, la repo deve essere **Public** oppure devi
+   usare il flusso Blueprint manuale).
+4. **NON** spuntare «Add a README», «Add .gitignore» o «Choose a license»:
+   lascia la repository vuota per evitare conflitti di merge.
+5. Crea la repository. Copia l'URL che ti mostra (es.
+   `https://github.com/<TUO-UTENTE>/latino-facile-app.git`).
+
+**Carica il progetto dalla cartella dello ZIP:**
+
+```bash
+cd latino-facile-app          # entra nella cartella estratta dallo ZIP
+git init                      # se lo ZIP non contiene già una cartella .git
+git add .
+git commit -m "Latino Facile: app completa (analisi Whitaker, OCR, PDF, traduzione, accessibilità)"
+git branch -M main
+git remote add origin https://github.com/<TUO-UTENTE>/latino-facile-app.git
+git push -u origin main
+```
+
+> ⚠️ **Sicurezza**: `.env` è escluso da `.gitignore` — non committare mai chiavi
+> API. In questa repository c'è solo `.env.example`, che è quello giusto da
+> condividere. Verifica con `git status` che `.env` non compaia tra i file
+> tracciati.
+
+---
+
+## 4. Passo 2 — Collegare Render (Blueprint, con un clic)
+
+Render legge il file **`render.yaml`** incluso nel pacchetto e crea da solo il
+servizio web (build, start, health check, variabili). Due modi:
+
+### 4.1 Con il pulsante «Deploy to Render» (solo repo Public)
+
+Nella pagina della tua repository GitHub, apri il file `render.yaml` e scorri
+fino al pulsante **Deploy to Render**, oppure usa questo URL sostituendo il tuo
+utente:
+
+```
+https://render.com/deploy?repo=https://github.com/<TUO-UTENTE>/latino-facile-app
+```
+
+### 4.2 Flusso Blueprint manuale (consigliato, funziona anche con repo Private)
+
+1. Su [render.com](https://render.com) → **New** → **Blueprint**.
+2. Collega l'account GitHub (se non l'hai già fatto) e seleziona la repository
+   `latino-facile-app`.
+3. Render legge `render.yaml` e propone il Web Service **latino-facile** con:
+   - **Build Command**: `pnpm install --frozen-lockfile && pnpm build`
+   - **Start Command**: `pnpm start`
+   - **Health Check Path**: `/_health`
+   - **Node.js 22** (`NODE_VERSION`), `BETTER_AUTH_SECRET` generata da Render
+4. Clicca **Apply / Create Resources**. Render installa, compila e avvia
+   l'app (primo deploy: qualche minuto).
+
+> 🔑 **Niente database richiesto**: il cuore dell'app (analisi grammaticale,
+> colorazione, OCR, PDF, traduzione con glossario) funziona **senza database**
+> e **senza chiavi API**. Il PostgreSQL serve solo per autenticazione
+> (Better Auth) e per la traduzione IA di qualità.
+
+---
+
+## 5. Passo 3 — Variabili d'ambiente dopo il primo deploy
+
+1. Apri il servizio su Render → scheda **Environment**.
+2. Imposta (o lascia vuote, come preferisci):
+
+| Variabile | Consigliato | Note |
+|---|---|---|
+| `TRUSTED_ORIGINS` | ✅ `https://<nome>.onrender.com` | Origine attendibile per CORS/cookie — il dominio finale del servizio |
+| `EASY_PEASY_API_KEY` | facoltativa | Traduzione IA (se assente → glossario parola per parola) |
+| `DEEPL_API_KEY` | facoltativa | Traduzione latino→italiano di qualità (DeepL API Free) |
+| `DATABASE_URL` | facoltativa | Solo se vuoi auth + traduzione IA (crea un PostgreSQL su Render o Neon) |
+
+3. **Save Changes**: Render riavvia da solo il servizio.
+
+---
+
+## 6. Passo 4 — Verifica
+
+1. Apri `https://<nome>.onrender.com/_health` → deve rispondere `ok`.
+2. Apri `https://<nome>.onrender.com/` → deve comparire la card studente
+   (Cognome / Nome / Data / Classe / ENTRA).
+3. Scrivi una frase latina (es. *Nostrarum regionum vallibus placidi greges
+   pascunt.*) → **COLORA FRASE** → le parole si colorano.
+4. Scarica il **PDF** e prova **MOSTRA TRADUZIONE**.
+5. La **barra di accessibilità** (FONT / INTERLINEA / RIGHELLO / MODALITÀ /
+   ASCOLTO) è visibile in cima: prova `A+` e **Leggi**.
+6. (Opzionale) Carica una foto con testo latino → si apre il **ritaglio** → Conferma → l'**OCR** la riconosce. Verifica anche che `https://<servizio>.onrender.com/tessdata/lat.traineddata.gz` risponda **200**. Dettaglio in [`OCR-FOTO.md`](OCR-FOTO.md) §6.
+
+---
+
+## 7. Passo 5 — Aggiornare la cornice embed col nuovo dominio
+
+Se usi la **cornice dinamica** su Blogger/siti, aggiorna `APP_URL` con il nuovo
+dominio Render:
+
+```js
+var APP_URL = 'https://<nome>.onrender.com/';   // in cornice-dinamica/embed-latino-facile-dedicata.html
+```
+
+I font OpenDyslexic e l'altezza automatica funzionano da soli (CORS `/fonts/*`
+e protocollo `labvisivo:height` sono già inclusi nel server). Dettagli:
+[`cornice-dinamica/README.md`](cornice-dinamica/README.md).
+
+> 💡 **Due modi per usare la cornice**: (1) incolla il contenuto di
+> `cornice-dinamica/embed-latino-facile-dedicata.html` nella vista HTML del
+> post Blogger, oppure (2) punta l'iframe direttamente alla cornice **servita
+> dall'app** su `/cornice-test/embed-latino-facile-dedicata.html` (la copia in
+> `client/public/cornice-test/` viaggia nel deploy insieme all'app). Se cambi
+> `APP_URL`, aggiorna la copia in `client/public/cornice-test/` e rifai il
+> deploy per tenerle allineate.
+
+---
+
+## 8. Aggiornamenti futuri (una volta sola la configurazione)
+
+Ogni modifica al codice, pubblicata con:
+
+```bash
+git add . && git commit -m "descrizione" && git push
+```
+
+attiva automaticamente:
+1. **GitHub Actions** (`.github/workflows/ci.yml`): install + type-check + test
+   + build. Se fallisce, il deploy non parte (protezione sulla `main`).
+2. **Render** (`autoDeploy: true`): rebuild + redeploy automatico.
+
+---
+
+## 9. Risoluzione dei problemi
+
+| Problema | Causa probabile | Soluzione |
+|---|---|---|
+| Il deploy fallisce con errore pnpm | corepack/pnpm non attivato | `render.yaml` dichiara `packageManager`; se il build fallisce, imposta `NODE_VERSION=22` (già presente) e riprova |
+| `/_health` non risponde | il servizio è ancora in avvio | attendi 2–3 minuti dal primo deploy; controlla i **Logs** del servizio |
+| La traduzione IA non funziona | manca `EASY_PEASY_API_KEY` o `DEEPL_API_KEY` | imposta la chiave in **Environment**; senza chiavi la traduzione usa il glossario |
+| Font OpenDyslexic non si caricano nell'embed | CORS `/fonts` non attivo o dominio sbagliato | verifica che il server serva `/fonts/*` con `Access-Control-Allow-Origin: *` (già incluso) e che `APP_URL` nella cornice sia il dominio Render |
+| L'app va in *sleep* dopo inattività | piano Free di Render | normale: il primo accesso dopo il riposo richiede ~30–60 s (cold start). Il piano Starter elimina questo ritardo |
+
+---
+
+## 10. Alternative e riferimenti
+
+- **Deploy manuale senza Blueprint**: Render → **New → Web Service** → collega
+  la repo → Build `pnpm install --frozen-lockfile && pnpm build` → Start
+  `pnpm start` → Health `/_health` → `NODE_VERSION=22`. (Guida completa in
+  [`REBUILD.md`](REBUILD.md) §7.2)
+- **Altre piattaforme**: Railway, Google Cloud Run, qualsiasi VPS — basta un
+  processo Node con `pnpm start` (vedi [`README.md`](README.md)).
+- **Ricostruire l'app da zero**: [`REBUILD.md`](REBUILD.md).
+- **Creare una nuova app in un'altra lingua** (inglese, spagnolo, francese):
+  [`ADATTARE.md`](ADATTARE.md).
+- **Accessibilità** (font OpenDyslexic, barra, lettura ad alta voce…):
+  [`ACCESSIBILITA.md`](ACCESSIBILITA.md).
+- **Configurazione Render**: [`render.yaml`](render.yaml).

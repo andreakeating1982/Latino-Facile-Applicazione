@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Package · Types · Tests · Build · Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install pnpm from packageManager
+        uses: pnpm/action-setup@v4
+      - name: Setup pinned Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install including build tools
+        run: pnpm install --frozen-lockfile --prod=false
+      - name: Check package structure and documentation
+        run: pnpm package:check
+      - name: Packaging and clone safety tests
+        run: pnpm test:package
+      - name: Type-check
+        run: pnpm check
+      - name: Unit tests (must exist)
+        run: pnpm test:ci
+      - name: Production build
+        run: pnpm build
+      - name: Isolated production smoke (no credentials or database)
+        run: pnpm smoke
+      - name: Keep portability reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portability-reports
+          path: |
+            .cache/package-check.json
+            .cache/production-smoke.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7

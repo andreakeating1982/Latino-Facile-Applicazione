@@ -1,0 +1,330 @@
+# 🔀 ADATTARE L'APP A UNA NUOVA LINGUA — Guida per agenti AI e sviluppatori
+
+> Questa guida spiega come creare, partendo da **questa** repository, un'app
+> **identica** «Latino Facile» ma per un'altra lingua straniera — tipicamente
+> **inglese**, **spagnolo** o **francese**. È scritta per essere eseguita da un **agente AI**
+> o da uno sviluppatore senza altri contesti: ogni passo è operativo e cita i
+> file esatti da modificare.
+>
+> Per ricostruire l'app **originale** (latino) usa invece [`REBUILD.md`](REBUILD.md).
+> Per il recap completo delle misure di accessibilità usa [`ACCESSIBILITA.md`](ACCESSIBILITA.md).
+> Se sei un agente AI, parti da [`AGENTS.md`](AGENTS.md): è il punto di ingresso della repository.
+
+---
+
+## 0. Cosa ottieni
+
+Una web app didattica con lo stesso funzionamento di «Latino Facile»:
+
+- l'utente scrive (o carica via **OCR**) una o più frasi nella nuova lingua;
+- il server le **analizza parola per parola** e le colora secondo uno schema
+  cromatico fisso (soggetto, verbo, complementi…);
+- toccando una parola si vedono le analisi possibili;
+- l'utente scarica il **PDF colorato** e può mostrare/nascondere la **traduzione**;
+- tutta l'**accessibilità resta identica**: font OpenDyslexic, barra di
+  accessibilità, focus da tastiera, PDF in OpenDyslexic, embed accessibile.
+
+L'app nuova vive sulla **stessa infrastruttura**: Vite + React + TypeScript +
+Tailwind (frontend), Express + tRPC (backend), e si deploya su **Render** con la
+stessa procedura GitHub → Render (vedi passo 9).
+
+---
+
+## 1. Strategia: cosa cambia e cosa resta identico
+
+| Componente | Cambia? | Note |
+|---|---|---|
+| Stack, architettura, script npm, `render.yaml` | ❌ | Stessi |
+| **Accessibilità** (font, barra, focus, PDF, embed) | ❌ | **NON TOCCARE** — vedi passo 7 |
+| Cornice dinamica (embed) | ⚙️ | Cambia solo `APP_URL`/`APP_TITLE` — passo 8 |
+| Testi UI (titolo, pulsanti, legenda, etichette, toast) | ✅ | Passo 2 |
+| Motore di analisi / glossario | ✅ | Passo 3 |
+| Dati OCR (`*.traineddata.gz`) | ✅ | Passo 4 |
+| PDF del quaderno | ✅ | Passo 5 |
+| Traduzione (glossario + provider) | ✅ | Passo 6 |
+| Nome progetto, titolo pagina, nome servizio Render | ✅ | Passo 1 |
+
+Il **punto di forza** dell'architettura: l'analisi linguistica è isolata in
+`server/analyzer/` dietro un'unica funzione (`analyzeText`) e i colori sono una
+legenda **universale** (categorie grammaticali, non dipendono dalla lingua):
+cambiare lingua = sostituire solo il motore di analisi, non la logica di
+colorazione né la UI che la mostra.
+
+---
+
+## 2. Passo 1 — Clonare e rinominare il progetto
+
+```bash
+git clone <questa-repository> english-facile-app   # oppure: unzip pacchetto.zip
+cd english-facile-app
+```
+
+Rinomina il progetto (esempi: `english-facile-app`, `spanish-facile-app`, `french-facile-app`):
+
+| File | Cosa cambiare |
+|---|---|
+| `package.json` | `"name": "english-facile-app"` |
+| `client/index.html` | `<html lang="en">` (o `"es"` o `"fr"`), `<title>English Facile</title>` (o `Spanish Facile` / `French Facile`) |
+| `manifest.json` | `"name"`, `"description"` |
+| `render.yaml` | `name: english-facile` (riga sotto `services:` → `type: web`) |
+| `README.md`, `REBUILD.md` (intestazioni) | Titolo «English Facile» (facoltativo ma consigliato) |
+
+Poi installa e verifica che tutto funzioni **prima** di toccare i contenuti:
+
+```bash
+pnpm install
+pnpm check      # TypeScript
+pnpm dev        # http://localhost:3000
+```
+
+---
+
+## 3. Passo 2 — Testi dell'interfaccia (titolo, pulsanti, legenda, PDF)
+
+Tutti i testi visibili all'utente. File coinvolti:
+
+| File | Cosa contiene / cambiare |
+|---|---|
+| `client/src/pages/WelcomePage.tsx` | Card studente: titolo «Latino Facile», campi **Cognome / Nome / Data / Classe** (es. *Surname / Name / Date / Class*), pulsante **ENTRA**; `aria-label` di ogni campo |
+| `client/src/pages/Home.tsx` | (Niente header con titolo: `/app` inizia con la card di input; il titolo «LATINO FACILE» resta solo in `WelcomePage.tsx` → «ENGLISH FACILE»); placeholder «Scrivi una o più frasi in latino» → «…in inglese»; pulsanti **COLORA FRASE CON IA**, **SCATTA UNA FOTO DEL TESTO**, **CARICA UNA FOTO**, **MOSTRA/NASCONDI TRADUZIONE**, **SCARICA IL PDF** (mantieni le etichette o traduci); tutti i `toast` («Testo riconosciuto e inserito…», limiti, errori); **`COLOR_PALETTE`** (riga ~55: derivata da `LEGEND_ITEMS` con `shadeForNumber` — 18 voci: per ogni caso «caso singolare»/«caso plurale» con le due sfumature, più Indicativo, Congiuntivo, Altri modi verbali, Avverbi, Preposizioni, Congiunzioni (niente «Sconosciuta»; evidenziazione del colore corrente PER VOCE via `vocePerAnalisi`)); titolo legenda «I colori delle frasi»; `aria-label` «Cambia il colore di {parola}» e `title` «Clicca per cambiare il colore»; `PDF_LINK` (riga 43, passo 5) |
+| `shared/types.ts` | **`LEGEND_ITEMS`** (riga ~151): **mantieni lo stesso schema di colori e le stesse `key`** (è la fonte unica della legenda di APP e PDF e il server ci mappa le categorie), traduci `label`, `sub` e `compl` (es. *NOMINATIVO → SUBJECT*, *chi? che cosa? → who? what?*, complemento *SOGGETTO → SUBJECT*; per AVVERBI/PREPOSIZIONI/CONGIUNZIONI `compl` è «PAROLE DI SERVIZIO» e `sub` porta esempi da adattare: `NUNC = ora · AD = a · ET = e`; traduci anche la nota voce `LEGEND_VOICE_NOTE` (ATTIVO/PASSIVO, parti `underline`); per i casi (`numero: true`) l'etichetta diventa «CASO SINGOLARE»/«CASO PLURALE» — la sfumatura chiara/scura indica il numero, solo sui sostantivi |
+| `client/src/lib/export.ts` | Testi del PDF colorato: titolo, etichette, intestazione riga (es. «Frase colorata») |
+| `client/src/components/CropDialog.tsx` | Modale «Ritaglia la foto», senza sottotitolo né icona centrale; trascinare l'interno della selezione anche su touch, pan solo nei margini/zone esterne mostrata quando si carica una foto prima dell'OCR: titolo, quattro pulsanti **Ruota sinistra / Ruota destra / Chiudi / Ritaglia**, tutti centrati in UN SOLO riquadro (`data-crop-controls`), marroni compatti e senza AZZERA, toast di errore («Non sono riuscito a ritagliare la foto…»). L'interazione è un **box di ritaglio libero senza testi di margini/sidebar**: la logica resta identica per ogni lingua (ridimensiona con le 4 barrette bianche sui bordi, sposta l'area chiara in blocco ovunque sulla foto; le foto piccole vengono ingrandite a schermo, MIN_IMG_W 560 px, nessun impatto sul taglio) |
+| `client/src/lib/ocr.ts` | Commenti e messaggi (facoltativo) |
+| `server/routers.ts` | Messaggi di errore restituiti al client |
+
+⚠️ Non cambiare: le **classi CSS** di colore usate dalla legenda, le `key` di
+`LEGEND_ITEMS` (il server le usa per mappare le categorie), gli id e i `name`
+dei form (il server legge i query param `cognome`, `nome`, `data`, `classe`
+nella rotta `/app`).
+
+---
+
+## 4. Passo 3 — Il motore di analisi per la nuova lingua
+
+### Come funziona oggi (latino)
+
+- `server/analyzer/index.ts` esporta `analyzeText(testo): Token[]` — per ogni
+  parola restituisce le categorie grammaticali possibili (caso, modo, categoria).
+- `server/analyzer/whitaker.ts` + `collatinus.ts` interrogano il motore
+  Whitaker's Words (dizionario latino).
+- `server/analyzer/mapper.ts` traduce le categorie Whitaker nella legenda colori.
+- `server/analyzer/itGloss*.ts` forniscono la traduzione italiana parola per parola.
+- Il **contratto** (tipi `Token`, `Categoria`, legenda) è in `shared/types.ts`.
+
+### Cosa fare per l'inglese o lo spagnolo
+
+Devi fornire un'implementazione di `analyzeText` per la nuova lingua che restituisca
+lo **stesso tipo di output** (`Token[]` con le stesse categorie della legenda).
+Tre approcci, dal più semplice al più sofisticato:
+
+1. **Lexicon JSON minimo (consigliato per partire)**: un file
+   `server/analyzer/enLexicon.ts` (o `esLexicon.ts`) — mappa parola → categoria,
+   es. `{ the: "articolo", run: "verbo", house: "nome", quickly: "avverbio", … }`.
+   Copia la struttura di `itGloss.ts`. Copre il vocabolario base della didattica.
+2. **POS tagger leggero (inglese)**: librerie npm come `compromise` o
+   `wink-pos-tagger` (funzionano offline, senza API). Aggiungile con
+   `pnpm add compromise` e usa il tag POS → mappa sulla legenda.
+   Per lo spagnolo: `es-pos` non è matura; in alternativa usa un lexicon + regole
+   sui suffissi (`-ción` → nome femminile, `-mente` → avverbio, `-ar/-er/-ir` → verbo…).
+   Per il **francese**: `frLexicon.ts` + regole sui suffissi (`-tion/-sion` → nome
+   femminile, `-ment` → avverbio, `-er/-ir/-re` → verbo, `-eux/-euse` → aggettivo…)
+   e sugli articoli/pronome clitici (`le/la/les`, `un/une/des`, `je/tu/il/elle`,
+   `ne…pas`, `c'est`, `qui/que/dont`…).
+3. **API esterna**: un servizio di analisi morfosintattica via HTTP (es. FreeLing
+   per spagnolo/francese, o un LLM). Richiede chiave API e latenza di rete.
+
+**Regola d'oro**: mantieni **identica** la mappa categoria → colore di
+`LEGEND_ITEMS`: la UI, il PDF e il quaderno cartaceo non cambiano, cambia solo
+il motore che decide la categoria di ogni parola.
+
+---
+
+## 5. Passo 4 — OCR nella nuova lingua
+
+> 📷 **Guida completa** (scatto, ritaglio, pretrattamento, Tesseract, riuso su
+> altre app, Render): **[`OCR-FOTO.md`](OCR-FOTO.md)**. Qui sotto solo il
+> cambio lingua.
+
+L'app trascrive il testo dalle foto con l'**IA** (route `POST /api/ai/transcribe`, contratto adattato alla lingua in `server/analyzer/aiTranscribeLatino.ts`) con soccorso **Tesseract.js**:
+
+- Dati linguistici: `client/public/tessdata/lat.traineddata.gz` → sostituisci con
+  `eng.traineddata.gz`, `spa.traineddata.gz` o `fra.traineddata.gz` (scaricali da
+  `https://github.com/naptha/tessdata/tree/gh-pages` — versione standard, il
+  worker li carica da `langPath: "/tessdata"`).
+- Lingua hardcoded: in `client/src/lib/ocr.ts` riga ~24 c'è
+  `createWorker("lat", 1, { langPath: "/tessdata", … })` → cambia `"lat"` in
+  `"eng"`, `"spa"` o `"fra"`.
+- Rinomina il file `.traineddata.gz` con il nome della lingua scelta
+  (`eng.traineddata.gz`, `spa.traineddata.gz`, `fra.traineddata.gz`) — il nome
+  deve combaciare con il parametro di `createWorker`.
+
+> ✂️ Prima dell'OCR l'app mostra la modale di **ritaglio** (`CropDialog.tsx`):
+> box libero, 4 barrette + 4 angoli **dentro** la foto, rotazione 90°, listener
+> sulla `window`, foto piccole ingrandite a schermo (≥ 560 px). La geometria è
+> indipendente dalla lingua: traduci solo i testi
+> visibili (Passo 2). Dettaglio e mini-pacchetto di file: [`OCR-FOTO.md`](OCR-FOTO.md) §5.
+>
+> 📱 **Ritaglio mobile (28/10):** CropDialog è `modal={true}`: app dietro
+> FERMA e corpo touch scorrevole. Copiare anche `useCropDialogViewport.ts`,
+> le regole CSS `.lf-crop-*` e la sospensione di heightSync durante il lock,
+> indispensabili nei blog con iframe auto-alti. ColorDialog resta distinto.
+> Guida e collaudo: [`SCROLLING-MOBILE.md`](SCROLLING-MOBILE.md).
+
+---
+
+## 6. Passo 5 — PDF colorato e quaderno
+
+- `client/src/lib/export.ts`: genera il PDF della frase colorata con **pdf-lib**.
+  Il PDF incorpora gli **stessi font OpenDyslexic** dell'interfaccia
+  (`client/public/fonts/OpenDyslexic-Regular.ttf` e `-Bold.ttf`): per il cambio
+  lingua **non serve toccare i font** — cambia solo i **testi** del PDF nella
+  nuova lingua.
+- `client/public/quaderno-unico-v16.pdf`: è il quaderno scaricabile (pulsante
+  **IL QUADERNO PDF**). Sostituisci il file con un quaderno per la nuova lingua
+  oppure aggiorna la costante `PDF_LINK` in `client/src/pages/Home.tsx`
+  (riga ~43: `const PDF_LINK = "/quaderno-unico-v16.pdf";`).
+  Se metti un file con nome diverso in `client/public/`, aggiorna `PDF_LINK`
+  con il nuovo percorso.
+
+---
+
+## 7. Passo 6 — Traduzione
+
+La traduzione è in `server/analyzer/itTranslate.ts` + `server/routers.ts`
+(procedure `latino.translate`):
+
+1. **Glossario parola per parola**: sostituisci/affianca `itGloss*.ts` con un
+   glossario nella nuova lingua (`enGloss.ts` / `esGloss.ts` / `frGloss.ts`,
+   stessa struttura).
+2. **Traduzione IA**: se è configurata `EASY_PEASY_API_KEY` o `DEEPL_API_KEY`,
+   la frase viene tradotta dal provider. Per inglese/spagnolo/francese basta
+   aggiornare la **coppia di lingue** della chiamata (es. `EN→IT`, `ES→IT`,
+   `FR→IT`) e il prompt/fallback.
+3. La logica di *mostra/nascondi* e di colorazione della traduzione
+   (`translationColors.ts`) è indipendente dalla lingua: non va toccata.
+
+---
+
+## 8. Passo 7 — Accessibilità: NON TOCCARE (copia tutto)
+
+L'accessibilità è il **pacchetto riutilizzabile** di questa repository. Per la
+nuova app **mantieni tutto esattamente com'è**:
+
+- `client/public/fonts/OpenDyslexic-*` e i `@font-face` in `client/src/index.css`;
+- `client/src/contexts/AccessibilityContext.tsx`,
+  `client/src/components/AccessibilityToolbar.tsx` (barra FONT/INTERLINEA/RIGHELLO/MODALITÀ/ASCOLTO) e
+  `client/src/hooks/useReadAloud.ts` (lettura ad alta voce);
+- variabili CSS `--lf-scale` / `--lf-lh`, classi `.lf-ruler` / `.lf-hc`,
+  regole `:focus-visible` e `@media (prefers-reduced-motion)` in `index.css`;
+- il blocco CORS `/fonts` in `server/_core/index.ts` (serve i font all'embed);
+- `client/src/lib/heightSync.ts` (altezza automatica dell'iframe).
+
+> 📖 Il documento **[`ACCESSIBILITA.md`](ACCESSIBILITA.md)** §3 spiega passo-passo
+> come portare il «pacchetto accessibilità» su **qualsiasi altra app** (non solo
+> questa famiglia): è la sezione da citare a un agente AI che deve rendere
+> accessibile un'app simile. La checklist finale (§4 di ACCESSIBILITA.md) va
+> eseguita anche sulla nuova app.
+
+---
+
+## 9. Passo 8 — Cornice dinamica per la nuova app
+
+La cornice embed è **universale**: per la nuova app non serve scrivere codice.
+Due punti di partenza, entrambi in `cornice-dinamica/`:
+
+1. **`embed-latino-facile-dedicata.html`** (~18 KB, ⭐ consigliata): la cornice
+   più completa — 🛡️ **impermeabile** (funziona anche se il blog ha altre
+   cornici simili nella stessa pagina: id univoci, scoping DOM, filtro
+   `e.source`) e 🛡️ **anti-loop** (debounce 200 ms, clamp 100–15000 px,
+   conferma dei salti sospetti, congelamento dopo 3 crescite: l'iframe non si
+   allunga a dismisura su mobile), pulsanti **Schermo intero** e **Ricarica**,
+   spinner di caricamento, **stato online/errore** con Riprova, altezza
+   dinamica. Titolo e pulsanti sulla stessa riga, tutti centrati. Cambia SOLO la riga
+   `APP_URL` nella sezione `⚙️ CONFIGURAZIONE` e, se vuoi, il titolo
+   (`<p class="lf-titolo">`).
+2. **`embed-universale.html`** (~5 KB): template minimale con URL segnaposto.
+
+```bash
+cp cornice-dinamica/embed-latino-facile-dedicata.html cornice-dinamica/embed-english-facile.html
+```
+
+Poi nel file copiato cambia **solo** la sezione `⚙️ CONFIGURAZIONE`:
+
+```js
+var APP_URL = 'https://english-facile.onrender.com/';   // ← dominio della nuova app
+```
+
+(e nel titolo dell'header: `ENGLISH FACILE`). L'iframe, i font OpenDyslexic
+(caricati da `APP_URL/fonts/*` via CORS) e l'altezza dinamica
+(`labvisivo:height`) si adattano da soli. Dettagli completi:
+[`cornice-dinamica/README.md`](cornice-dinamica/README.md).
+
+> 📦 **Cornice servita anche dall'app** (facoltativo ma consigliato): la cartella
+> `client/public/cornice-test/` contiene la copia della cornice che il deploy
+> dell'app serve all'URL `/cornice-test/embed-<lingua>-facile.html` (così puoi
+> puntare l'iframe di Blogger direttamente al dominio dell'app senza incollare
+> codice). Dopo aver aggiornato `APP_URL` nella cornice di `cornice-dinamica/`,
+> **copia il file aggiornato anche in `client/public/cornice-test/`** (stesso
+> nome) e rifai il build/deploy: il file servito sarà sempre allineato alla
+> sorgente.
+
+⚠️ Prerequisiti lato app: la nuova app deve servire `/fonts/*` con **CORS**
+abilitato (già incluso se copi il blocco di `server/_core/index.ts`) e deve
+rispondere al ping `labvisivo:ping` (già incluso con `heightSync.ts`).
+
+---
+
+## 10. Passo 9 — Deploy su Render (GitHub → Render)
+
+La nuova app si deploya **esattamente come l'originale** (vedi `README.md`
+sezione «Trasferimento da Easy-Peasy AI a Render»):
+
+1. Crea una repository su GitHub (es. `english-facile-app`) e **carica il
+   progetto** (il pacchetto ZIP è già una repo pronta: escludi solo
+   `node_modules`, `dist`, `.env`, `.git`). La procedura completa
+   EasyPeasy → GitHub → Render è in [`RENDER.md`](RENDER.md).
+2. Su **render.com**: `New → Blueprint` → collega la repository. Render legge
+   `render.yaml` (già rinominato al passo 1) e crea il Web Service.
+3. Opzionale: crea un database PostgreSQL (Render o Neon) e imposta
+   `DATABASE_URL`; imposta `DEEPL_API_KEY` se vuoi la traduzione IA di qualità.
+4. Verifica: `https://english-facile.onrender.com/_health` risponde `ok` e
+   l'app si apre con la card studente.
+5. Aggiorna la cornice (passo 8) con il dominio finale e incollala su Blogger.
+
+---
+
+## 11. Checklist di verifica finale (per l'agente AI)
+
+- [ ] CropDialog ha `modal={true}`, lock/viewport hook e corpo scorrevole; ColorDialog è invariato. Eseguire `node tests/crop-mobile.e2e.mjs` anche per l'iframe cross-origin (vedi `SCROLLING-MOBILE.md`).
+
+- [ ] `pnpm check` passa senza errori TypeScript
+- [ ] L'app si apre su `/` con la card studente (Cognome/Nome/Data/Classe nella nuova lingua)
+- [ ] Scrivendo una frase nella nuova lingua (inglese, spagnolo o francese) e premendo **COLORA FRASE CON IA** le parole si colorano con la legenda universale
+- [ ] Toccando una parola compaiono le analisi possibili (dal nuovo motore)
+- [ ] **OCR**: una foto con testo nella nuova lingua viene riconosciuta (`eng`/`spa`/`fra` traineddata + `createWorker` aggiornati)
+- [ ] **PDF**: il download produce il PDF colorato con i testi nella nuova lingua; **IL QUADERNO PDF** scarica il nuovo quaderno
+- [ ] **Traduzione**: Mostra/Nascondi funziona (glossario e/o IA nella nuova coppia di lingue)
+- [ ] **Accessibilità**: font OpenDyslexic visibile, barra FONT/INTERLINEA/RIGHELLO/MODALITÀ attiva e persistente, focus da tastiera, PDF in OpenDyslexic — cfr. checklist `ACCESSIBILITA.md` §4
+- [ ] La **cornice** (nuovo `embed-*.html`) mostra l'app con altezza automatica
+- [ ] Su Render: `/_health` ok, app raggiungibile dal dominio finale
+
+---
+
+## 12. Mappa file → modifica (riepilogo)
+
+| File | Azione per la nuova lingua |
+|---|---|
+| `package.json`, `client/index.html`, `manifest.json`, `render.yaml` | Rinomina (passo 1) |
+| `client/src/pages/WelcomePage.tsx` | Testi card studente + `aria-label` (passo 2) |
+| `client/src/pages/Home.tsx` | Titolo, placeholder, pulsanti, toast, `COLOR_PALETTE` (12 etichette), titolo legenda, `aria-label` parole, `PDF_LINK` (passi 2, 5) |
+| `shared/types.ts` | `LEGEND_ITEMS`: traduci `label`/`sub`/`compl`, **non cambiare colori e key** (passo 2) |
+| `client/src/lib/export.ts` | Testi del PDF colorato (passo 5) |
+| `client/src/lib/ocr.ts` | Lingua `createWorker("lat" → "eng"/"spa"/"fra")` (passo 4) |
+| `client/public/tessdata/*.traineddata.gz` | Sostituisci con la lingua nuova (`eng`/`spa`/`fra`) (passo 4) |
+| `client/public/quaderno-unico-v16.pdf` | Nuovo quaderno (passo 5) |
+| `server/analyzer/index.ts` + nuovo `enLexicon.ts`/`esLexicon.ts`/`frLexicon.ts` | Nuovo motore di analisi con lo stesso contratto (passo 3) |
+| `server/analyzer/itGloss*.ts` → `enGloss.ts`/`esGloss.ts`/`frGloss.ts` | Glossario per la traduzione (passo 6) |
+| `server/routers.ts` | Coppia di lingue del provider di traduzione (passo 6) |
+| `cornice-dinamica/embed-latino-facile-dedicata.html` (o `embed-universale.html`) → `embed-english-facile.html` | `APP_URL` (e titolo nell'header) (passo 8) |
+| ❌ `client/src/index.css`, `AccessibilityContext.tsx`, `AccessibilityToolbar.tsx`, `useReadAloud.ts`, `heightSync.ts`, CORS `/fonts` | **Non toccare** — pacchetto accessibilità (passo 7) |
